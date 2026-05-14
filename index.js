@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import http from "node:http";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createToken, publicUser, verifyPassword } from "./auth.js";
@@ -7,6 +8,8 @@ import { parseDelimited } from "./csv.js";
 import { parseXlsx } from "./xlsx.js";
 import { exportCsv, exportPdf, exportXlsx } from "./exporters.js";
 
+const require = createRequire(import.meta.url);
+const bundledData = require("./app-data.json");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const runtimeEnv = globalThis.process?.env ?? {};
@@ -1395,7 +1398,11 @@ async function readData() {
     return cachedData;
   }
   const file = await fileExists(dataFile) ? dataFile : flatDataFile;
-  cachedData = JSON.parse(await fs.readFile(file, "utf8"));
+  try {
+    cachedData = JSON.parse(await fs.readFile(file, "utf8"));
+  } catch {
+    cachedData = structuredClone(bundledData);
+  }
   return cachedData;
 }
 
