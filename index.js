@@ -166,7 +166,8 @@ export async function handleRequest(request, response) {
     console.error(error);
     sendJson(response, 500, {
       error: "Erro interno",
-      message: "Nao foi possivel processar a solicitacao. Tente novamente ou acione o administrador."
+      message: "Nao foi possivel processar a solicitacao. Tente novamente ou acione o administrador.",
+      debug: error?.message
     });
   }
 }
