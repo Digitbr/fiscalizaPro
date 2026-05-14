@@ -9,15 +9,19 @@ import { exportCsv, exportPdf, exportXlsx } from "./exporters.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, "../..");
-const publicDir = path.join(rootDir, "public");
-const dataFile = path.join(rootDir, "data", "app-data.json");
 const runtimeEnv = globalThis.process?.env ?? {};
+const rootDir = __dirname;
+const publicDir = path.join(rootDir, "public");
+const flatPublicDir = rootDir;
+const dataFile = path.join(rootDir, "data", "app-data.json");
+const flatDataFile = path.join(rootDir, "app-data.json");
+const isVercel = Boolean(runtimeEnv.VERCEL);
 const port = Number(runtimeEnv.PORT ?? 4173);
 
 const sessions = new Map();
 const failedLogins = new Map();
 const jsonLimitBytes = 16 * 1024 * 1024;
+let cachedData = null;
 
 const reportDefinitions = {
   employees: {
@@ -142,7 +146,7 @@ const reportDefinitions = {
   }
 };
 
-const server = http.createServer(async (request, response) => {
+export async function handleRequest(request, response) {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
@@ -162,11 +166,14 @@ const server = http.createServer(async (request, response) => {
       message: "Nao foi possivel processar a solicitacao. Tente novamente ou acione o administrador."
     });
   }
-});
+}
 
-server.listen(port, () => {
-  console.log(`FiscalizaPro rodando em http://localhost:${port}`);
-});
+if (isMainModule()) {
+  const server = http.createServer(handleRequest);
+  server.listen(port, () => {
+    console.log(`FiscalizaPro rodando em http://localhost:${port}`);
+  });
+}
 
 async function routeApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/auth/login") {
@@ -1384,11 +1391,21 @@ function pathId(pathname, index) {
 }
 
 async function readData() {
-  return JSON.parse(await fs.readFile(dataFile, "utf8"));
+  if (cachedData) {
+    return cachedData;
+  }
+  const file = await fileExists(dataFile) ? dataFile : flatDataFile;
+  cachedData = JSON.parse(await fs.readFile(file, "utf8"));
+  return cachedData;
 }
 
 async function writeData(data) {
-  await fs.writeFile(dataFile, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  cachedData = data;
+  if (isVercel) {
+    return;
+  }
+  const file = await fileExists(dataFile) ? dataFile : flatDataFile;
+  await fs.writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
 async function readJson(request) {
@@ -1428,9 +1445,10 @@ function sendBuffer(response, statusCode, buffer, contentType, fileName) {
 
 async function serveStatic(request, response, url) {
   const safePath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
-  const resolvedPath = path.normalize(path.join(publicDir, safePath));
+  const staticDir = await fileExists(path.join(publicDir, "index.html")) ? publicDir : flatPublicDir;
+  const resolvedPath = path.normalize(path.join(staticDir, safePath));
 
-  if (!resolvedPath.startsWith(publicDir)) {
+  if (!resolvedPath.startsWith(staticDir)) {
     response.writeHead(403);
     response.end("Forbidden");
     return;
@@ -1444,7 +1462,7 @@ async function serveStatic(request, response, url) {
     });
     response.end(file);
   } catch {
-    const fallback = await fs.readFile(path.join(publicDir, "index.html"));
+    const fallback = await fs.readFile(path.join(staticDir, "index.html"));
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store"
@@ -1460,6 +1478,19 @@ function contentType(filePath) {
   if (filePath.endsWith(".svg")) return "image/svg+xml";
   if (filePath.endsWith(".png")) return "image/png";
   return "application/octet-stream";
+}
+
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isMainModule() {
+  return process.argv[1] && path.resolve(process.argv[1]) === __filename;
 }
 
 class HandledResponse extends Error {}

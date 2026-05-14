@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Plataforma responsiva para fiscalizacao operacional de servicos terceirizados.",
   "scripts": {
-    "dev": "node src/server/index.js",
-    "start": "node src/server/index.js",
-    "check": "node --check src/server/index.js && node --check src/server/auth.js && node --check src/server/csv.js && node --check src/server/xlsx.js && node --check src/server/exporters.js"
+    "dev": "node index.js",
+    "start": "node index.js",
+    "check": "node --check index.js && node --check auth.js && node --check csv.js && node --check xlsx.js && node --check exporters.js && node --check api/index.js"
   },
   "engines": {
     "node": ">=20"
