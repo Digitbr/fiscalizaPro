@@ -1,0 +1,595 @@
+{
+  "roles": [
+    {
+      "id": "role-admin",
+      "name": "Admin Operacional",
+      "code": "ADMIN_OPERACIONAL"
+    },
+    {
+      "id": "role-fiscal",
+      "name": "Fiscal Operacional",
+      "code": "FISCAL_OPERACIONAL"
+    },
+    {
+      "id": "role-supervisor",
+      "name": "Supervisor Operacional",
+      "code": "SUPERVISOR_OPERACIONAL"
+    },
+    {
+      "id": "role-consulta",
+      "name": "Usuario Consulta",
+      "code": "USUARIO_CONSULTA"
+    }
+  ],
+  "users": [
+    {
+      "id": "usr-admin-001",
+      "name": "Mariana Costa",
+      "email": "admin@fiscalizapro.com",
+      "enrollment": "ADM001",
+      "role": "ADMIN_OPERACIONAL",
+      "area": "Operacoes Corporativas",
+      "status": "Ativo",
+      "passwordSalt": "48870b372eabad2c4baddba784291d11",
+      "passwordHash": "415f4d5231b8a8bb03f693cc83589448f66f6808dd197e9841becec23bc477cb",
+      "createdAt": "2026-05-01T08:00:00.000Z"
+    },
+    {
+      "id": "usr-fiscal-001",
+      "name": "Bruno Almeida",
+      "email": "fiscal@fiscalizapro.com",
+      "enrollment": "FIS100",
+      "role": "FISCAL_OPERACIONAL",
+      "area": "Regional Norte",
+      "status": "Ativo",
+      "passwordSalt": "7e56781d4ed89fe25410c361aa78feec",
+      "passwordHash": "a92a0f5ba3b737b3950dae775560de854742a4aa0055de79cabbb51e22e45ac9",
+      "createdAt": "2026-05-01T08:00:00.000Z"
+    },
+    {
+      "id": "usr-supervisor-001",
+      "name": "Renata Lopes",
+      "email": "supervisor@fiscalizapro.com",
+      "enrollment": "SUP200",
+      "role": "SUPERVISOR_OPERACIONAL",
+      "area": "Facilities",
+      "status": "Ativo",
+      "passwordSalt": "7e68fa26929b4b655ba8ad796946d7c5",
+      "passwordHash": "0dc4b84d27c17887f70621ddb76e23e5853922dc4431fb40ca72ca82178e4d79",
+      "createdAt": "2026-05-01T08:00:00.000Z"
+    },
+    {
+      "id": "usr-consulta-001",
+      "name": "Paulo Henrique",
+      "email": "consulta@fiscalizapro.com",
+      "enrollment": "CON300",
+      "role": "USUARIO_CONSULTA",
+      "area": "Auditoria",
+      "status": "Ativo",
+      "passwordSalt": "febebdb95461293e8e430464411473ca",
+      "passwordHash": "52b644ea179fc9efd19a4501e5f2e49f0ca09118a99a521cec3efd7c9e065f5b",
+      "createdAt": "2026-05-01T08:00:00.000Z"
+    }
+  ],
+  "serviceTypes": [
+    {
+      "id": "svc-vigilancia",
+      "name": "Vigilancia patrimonial",
+      "status": "Ativo"
+    },
+    {
+      "id": "svc-cftv",
+      "name": "CFTV / monitoramento",
+      "status": "Ativo"
+    },
+    {
+      "id": "svc-portaria",
+      "name": "Portaria",
+      "status": "Ativo"
+    },
+    {
+      "id": "svc-limpeza",
+      "name": "Limpeza",
+      "status": "Ativo"
+    },
+    {
+      "id": "svc-manutencao",
+      "name": "Manutencao predial",
+      "status": "Ativo"
+    },
+    {
+      "id": "svc-jardinagem",
+      "name": "Jardinagem",
+      "status": "Ativo"
+    }
+  ],
+  "employees": [
+    {
+      "id": "emp-001",
+      "enrollment": "VIG001",
+      "fullName": "Joao Silva",
+      "cpf": "12345678901",
+      "position": "Vigilante",
+      "serviceType": "Vigilancia patrimonial",
+      "unit": "Shopping Norte",
+      "workPost": "Portaria 1",
+      "shiftScale": "12x36",
+      "workHours": "07:00-19:00",
+      "admissionDate": "2026-05-10",
+      "terminationDate": "",
+      "status": "Ativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "SegurTotal",
+      "contract": "CT-2026-001",
+      "contractEndDate": "2026-06-10",
+      "phone": "(11) 90000-1001",
+      "email": "joao.silva@segurtotal.com",
+      "notes": "Admissao recente",
+      "updatedAt": "2026-05-13T10:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "emp-002",
+      "enrollment": "LIM023",
+      "fullName": "Maria Santos",
+      "cpf": "12345678902",
+      "position": "Auxiliar de limpeza",
+      "serviceType": "Limpeza",
+      "unit": "Hospital Central",
+      "workPost": "Ala A",
+      "shiftScale": "6x1",
+      "workHours": "06:00-14:20",
+      "admissionDate": "2025-11-05",
+      "terminationDate": "2026-05-12",
+      "status": "Inativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "LimpaMais",
+      "contract": "CT-2025-099",
+      "contractEndDate": "2026-12-31",
+      "phone": "(11) 90000-1002",
+      "email": "maria.santos@limpamais.com",
+      "notes": "Desligamento registrado",
+      "updatedAt": "2026-05-12T18:30:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "emp-003",
+      "enrollment": "POR055",
+      "fullName": "Carlos Oliveira",
+      "cpf": "12345678903",
+      "position": "Porteiro",
+      "serviceType": "Portaria",
+      "unit": "Condominios Serra",
+      "workPost": "Bloco B",
+      "shiftScale": "12x36",
+      "workHours": "19:00-07:00",
+      "admissionDate": "2024-03-15",
+      "terminationDate": "",
+      "status": "Ativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "Portaria Prime",
+      "contract": "CT-2024-012",
+      "contractEndDate": "2026-05-28",
+      "phone": "(11) 90000-1003",
+      "email": "carlos.oliveira@portariaprime.com",
+      "notes": "Movimentado do Posto A para o Posto B",
+      "updatedAt": "2026-05-11T13:30:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "emp-004",
+      "enrollment": "CFT017",
+      "fullName": "Ana Martins",
+      "cpf": "12345678904",
+      "position": "Operadora de CFTV",
+      "serviceType": "CFTV / monitoramento",
+      "unit": "Shopping Norte",
+      "workPost": "Sala de monitoramento",
+      "shiftScale": "12x36",
+      "workHours": "07:00-19:00",
+      "admissionDate": "2025-01-08",
+      "terminationDate": "",
+      "status": "Ativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "MonitorPro",
+      "contract": "CT-2025-010",
+      "contractEndDate": "2027-01-08",
+      "phone": "(11) 90000-1004",
+      "email": "ana.martins@monitorpro.com",
+      "notes": "",
+      "updatedAt": "2026-05-09T09:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "emp-005",
+      "enrollment": "MAN010",
+      "fullName": "Roberto Lima",
+      "cpf": "12345678905",
+      "position": "Tecnico predial",
+      "serviceType": "Manutencao predial",
+      "unit": "Hospital Central",
+      "workPost": "Casa de maquinas",
+      "shiftScale": "5x2",
+      "workHours": "08:00-17:48",
+      "admissionDate": "2026-04-20",
+      "terminationDate": "",
+      "status": "Ativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "PredialMax",
+      "contract": "CT-2026-020",
+      "contractEndDate": "2026-11-30",
+      "phone": "(11) 90000-1005",
+      "email": "roberto.lima@predialmax.com",
+      "notes": "Periodo de experiencia",
+      "updatedAt": "2026-05-08T11:00:00.000Z",
+      "deletedAt": null
+    },
+    {
+      "id": "emp-006",
+      "enrollment": "JAR004",
+      "fullName": "Fernanda Rocha",
+      "cpf": "12345678906",
+      "position": "Jardineira",
+      "serviceType": "Jardinagem",
+      "unit": "Condominios Serra",
+      "workPost": "Area externa",
+      "shiftScale": "5x2",
+      "workHours": "07:00-16:48",
+      "admissionDate": "2025-07-01",
+      "terminationDate": "",
+      "status": "Ativo",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "company": "VerdeVivo",
+      "contract": "CT-2025-044",
+      "contractEndDate": "2026-07-01",
+      "phone": "(11) 90000-1006",
+      "email": "fernanda.rocha@verdevivo.com",
+      "notes": "",
+      "updatedAt": "2026-05-07T11:00:00.000Z",
+      "deletedAt": null
+    }
+  ],
+  "employeeMovements": [
+    {
+      "id": "mov-001",
+      "employeeId": "emp-001",
+      "employeeName": "Joao Silva",
+      "type": "Admissao",
+      "date": "2026-05-10",
+      "registeredBy": "usr-admin-001",
+      "reason": "Nova cobertura contratual",
+      "previousUnit": "",
+      "newUnit": "Shopping Norte",
+      "previousPost": "",
+      "newPost": "Portaria 1",
+      "notes": "Criado automaticamente pela importacao inicial",
+      "status": "Confirmada"
+    },
+    {
+      "id": "mov-002",
+      "employeeId": "emp-002",
+      "employeeName": "Maria Santos",
+      "type": "Demissao",
+      "date": "2026-05-12",
+      "registeredBy": "usr-admin-001",
+      "reason": "Encerramento de contrato de trabalho",
+      "previousUnit": "Hospital Central",
+      "newUnit": "",
+      "previousPost": "Ala A",
+      "newPost": "",
+      "notes": "Baixa operacional concluida",
+      "status": "Confirmada"
+    },
+    {
+      "id": "mov-003",
+      "employeeId": "emp-003",
+      "employeeName": "Carlos Oliveira",
+      "type": "Troca de posto",
+      "date": "2026-05-11",
+      "registeredBy": "usr-supervisor-001",
+      "reason": "Ajuste de cobertura noturna",
+      "previousUnit": "Condominios Serra",
+      "newUnit": "Condominios Serra",
+      "previousPost": "Bloco A",
+      "newPost": "Bloco B",
+      "notes": "",
+      "status": "Confirmada"
+    }
+  ],
+  "routes": [
+    {
+      "id": "rot-001",
+      "name": "Rota Shopping Norte",
+      "description": "Fiscalizacao diaria de vigilancia, CFTV e portaria.",
+      "fiscalId": "usr-fiscal-001",
+      "fiscalName": "Bruno Almeida",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "unit": "Shopping Norte",
+      "client": "Shopping Norte",
+      "frequency": "Diaria",
+      "weekDays": [
+        "Seg",
+        "Ter",
+        "Qua",
+        "Qui",
+        "Sex"
+      ],
+      "scheduledTime": "09:00",
+      "services": [
+        "Vigilancia patrimonial",
+        "CFTV / monitoramento",
+        "Portaria"
+      ],
+      "status": "Programada",
+      "requiresPhoto": true,
+      "requiresGeolocation": true,
+      "deadlineHours": 4,
+      "points": [
+        {
+          "id": "pt-001",
+          "order": 1,
+          "name": "Portaria 1",
+          "expectedTime": "09:15",
+          "checklist": [
+            "Funcionario presente?",
+            "Uniforme adequado?",
+            "Posto coberto?",
+            "Livro de ocorrencias atualizado?"
+          ]
+        },
+        {
+          "id": "pt-002",
+          "order": 2,
+          "name": "Sala de CFTV",
+          "expectedTime": "10:00",
+          "checklist": [
+            "Operador presente?",
+            "Cameras operantes?",
+            "Registro de falhas atualizado?"
+          ]
+        }
+      ],
+      "observations": "Priorizar evidencias fotograficas nos postos criticos.",
+      "createdAt": "2026-05-01T08:00:00.000Z"
+    },
+    {
+      "id": "rot-002",
+      "name": "Rota Hospital Central",
+      "description": "Fiscalizacao de limpeza e manutencao predial.",
+      "fiscalId": "usr-fiscal-001",
+      "fiscalName": "Bruno Almeida",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "unit": "Hospital Central",
+      "client": "Hospital Central",
+      "frequency": "Diaria",
+      "weekDays": [
+        "Seg",
+        "Qua",
+        "Sex"
+      ],
+      "scheduledTime": "14:00",
+      "services": [
+        "Limpeza",
+        "Manutencao predial"
+      ],
+      "status": "Atrasada",
+      "requiresPhoto": true,
+      "requiresGeolocation": false,
+      "deadlineHours": 3,
+      "points": [
+        {
+          "id": "pt-003",
+          "order": 1,
+          "name": "Ala A",
+          "expectedTime": "14:10",
+          "checklist": [
+            "Equipe completa?",
+            "Material suficiente?",
+            "Area higienizada?"
+          ]
+        },
+        {
+          "id": "pt-004",
+          "order": 2,
+          "name": "Casa de maquinas",
+          "expectedTime": "15:10",
+          "checklist": [
+            "Tecnico presente?",
+            "Chamados pendentes revisados?",
+            "EPIs adequados?"
+          ]
+        }
+      ],
+      "observations": "",
+      "createdAt": "2026-05-02T08:00:00.000Z"
+    }
+  ],
+  "inspections": [],
+  "occurrences": [
+    {
+      "id": "occ-001",
+      "protocol": "OCO-20260513-0001",
+      "type": "Posto descoberto",
+      "description": "Posto de portaria ficou sem cobertura por 35 minutos.",
+      "serviceRelated": "Portaria",
+      "unit": "Condominios Serra",
+      "workPost": "Bloco B",
+      "employeeId": "emp-003",
+      "employeeName": "Carlos Oliveira",
+      "fiscalId": "usr-fiscal-001",
+      "fiscalName": "Bruno Almeida",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "dateTime": "2026-05-13T11:10:00.000Z",
+      "priority": "Alta",
+      "status": "Em analise",
+      "photos": [],
+      "location": "Condominios Serra",
+      "comments": [],
+      "history": [
+        {
+          "dateTime": "2026-05-13T11:10:00.000Z",
+          "actorId": "usr-fiscal-001",
+          "action": "Ocorrencia registrada"
+        }
+      ]
+    },
+    {
+      "id": "occ-002",
+      "protocol": "OCO-20260513-0002",
+      "type": "Material insuficiente",
+      "description": "Material de limpeza abaixo do minimo operacional na Ala A.",
+      "serviceRelated": "Limpeza",
+      "unit": "Hospital Central",
+      "workPost": "Ala A",
+      "employeeId": "",
+      "employeeName": "",
+      "fiscalId": "usr-fiscal-001",
+      "fiscalName": "Bruno Almeida",
+      "supervisorId": "usr-supervisor-001",
+      "supervisorName": "Renata Lopes",
+      "dateTime": "2026-05-13T15:25:00.000Z",
+      "priority": "Media",
+      "status": "Aberta",
+      "photos": [],
+      "location": "Hospital Central",
+      "comments": [],
+      "history": [
+        {
+          "dateTime": "2026-05-13T15:25:00.000Z",
+          "actorId": "usr-fiscal-001",
+          "action": "Ocorrencia registrada"
+        }
+      ]
+    }
+  ],
+  "serviceTasks": [
+    {
+      "id": "tsk-001",
+      "title": "Validar posto descoberto no Condominios Serra",
+      "description": "Verificar causa raiz e registrar tratativa para o posto Bloco B.",
+      "category": "Validar ocorrencia",
+      "priority": "Alta",
+      "responsibleId": "usr-supervisor-001",
+      "responsibleName": "Renata Lopes",
+      "dueDate": "2026-05-14",
+      "status": "Aberto",
+      "attachments": [],
+      "comments": [],
+      "history": [
+        {
+          "dateTime": "2026-05-13T11:12:00.000Z",
+          "actorId": "usr-admin-001",
+          "action": "Servico criado"
+        }
+      ],
+      "employeeId": "emp-003",
+      "unit": "Condominios Serra",
+      "routeId": "rot-001",
+      "occurrenceId": "occ-001"
+    },
+    {
+      "id": "tsk-002",
+      "title": "Solicitar reposicao de material de limpeza",
+      "description": "Reposicao emergencial de insumos na Ala A.",
+      "category": "Conferir material de limpeza",
+      "priority": "Media",
+      "responsibleId": "usr-supervisor-001",
+      "responsibleName": "Renata Lopes",
+      "dueDate": "2026-05-15",
+      "status": "Em andamento",
+      "attachments": [],
+      "comments": [],
+      "history": [],
+      "employeeId": "",
+      "unit": "Hospital Central",
+      "routeId": "rot-002",
+      "occurrenceId": "occ-002"
+    }
+  ],
+  "notices": [
+    {
+      "id": "not-001",
+      "title": "Joao Silva admitido para vigilancia",
+      "category": "Admissoes",
+      "date": "2026-05-10",
+      "authorId": "system",
+      "authorName": "FiscalizaPro",
+      "targetAudience": [
+        "ADMIN_OPERACIONAL",
+        "FISCAL_OPERACIONAL",
+        "SUPERVISOR_OPERACIONAL"
+      ],
+      "priority": "Normal",
+      "body": "Joao Silva foi admitido em 10/05/2026 para o cargo de Vigilante no Shopping Norte.",
+      "attachments": [],
+      "requiresReadConfirmation": false,
+      "readBy": []
+    },
+    {
+      "id": "not-002",
+      "title": "Contratos proximos do vencimento",
+      "category": "Contratos",
+      "date": "2026-05-13",
+      "authorId": "system",
+      "authorName": "FiscalizaPro",
+      "targetAudience": [
+        "ADMIN_OPERACIONAL",
+        "SUPERVISOR_OPERACIONAL"
+      ],
+      "priority": "Alta",
+      "body": "Existem funcionarios vinculados a contratos com termino previsto nos proximos 30 dias.",
+      "attachments": [],
+      "requiresReadConfirmation": true,
+      "readBy": []
+    },
+    {
+      "id": "not-003",
+      "title": "Rota Hospital Central atrasada",
+      "category": "Rotas",
+      "date": "2026-05-13",
+      "authorId": "system",
+      "authorName": "FiscalizaPro",
+      "targetAudience": [
+        "ADMIN_OPERACIONAL",
+        "FISCAL_OPERACIONAL",
+        "SUPERVISOR_OPERACIONAL"
+      ],
+      "priority": "Alta",
+      "body": "A rota Hospital Central esta atrasada e precisa de acompanhamento operacional.",
+      "attachments": [],
+      "requiresReadConfirmation": false,
+      "readBy": []
+    }
+  ],
+  "importBatches": [],
+  "importErrors": [],
+  "auditLogs": [
+    {
+      "id": "aud-001",
+      "actorId": "system",
+      "actorName": "FiscalizaPro",
+      "action": "seed.created",
+      "entity": "System",
+      "entityId": "initial-data",
+      "details": "Dados mockados iniciais criados.",
+      "ip": "local",
+      "createdAt": "2026-05-13T08:00:00.000Z"
+    }
+  ],
+  "attachments": [],
+  "settings": {
+    "sessionMinutes": 480,
+    "loginLockoutAttempts": 5,
+    "contractWarningDays": 30,
+    "experienceDays": 90
+  }
+}

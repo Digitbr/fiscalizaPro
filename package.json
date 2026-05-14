@@ -1,0 +1,15 @@
+{
+  "name": "fiscalizapro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plataforma responsiva para fiscalizacao operacional de servicos terceirizados.",
+  "scripts": {
+    "dev": "node src/server/index.js",
+    "start": "node src/server/index.js",
+    "check": "node --check src/server/index.js && node --check src/server/auth.js && node --check src/server/csv.js && node --check src/server/xlsx.js && node --check src/server/exporters.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
