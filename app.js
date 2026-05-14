@@ -235,12 +235,17 @@ async function renderEmployees(content) {
 }
 
 async function renderRoutes(content) {
-  const { routes } = await api("/api/routes");
+  const [{ routes }, usersData] = await Promise.all([
+    api("/api/routes"),
+    state.user.role === "ADMIN_OPERACIONAL" ? api("/api/users") : Promise.resolve({ users: [] })
+  ]);
+  const routeUsers = usersData.users || [];
   content.innerHTML = `
     ${pageHeader("Rotas de fiscalização", "Planejamento, execução, checklist e status por fiscal e supervisor.")}
     ${flashHtml()}
+    ${state.user.role === "ADMIN_OPERACIONAL" ? routeForm(null, routeUsers) : ""}
     <section class="grid two">
-      ${routes.map(routeCard).join("") || empty("Nenhuma rota encontrada para o seu perfil.")}
+      ${routes.map((route) => routeCard(route, routeUsers)).join("") || empty("Nenhuma rota encontrada para o seu perfil.")}
     </section>
   `;
 }
@@ -866,6 +871,11 @@ document.addEventListener("click", async (event) => {
       return;
     }
 
+    if (actionName === "route-cancel-edit") {
+      renderView();
+      return;
+    }
+
     if (actionName === "task-status") {
       await api(`/api/services/${target.dataset.id}`, {
         method: "PATCH",
@@ -921,6 +931,19 @@ document.addEventListener("submit", async (event) => {
 
     if (form.id === "employee-import-form") {
       await importEmployees(form);
+      renderView();
+      return;
+    }
+
+    if (form.id === "route-create-form" || form.dataset.form === "route-edit-form") {
+      const body = routePayloadFromForm(formData);
+      if (form.dataset.form === "route-edit-form") {
+        await api(`/api/routes/${form.dataset.id}`, { method: "PATCH", body });
+        flash("Rota atualizada com sucesso.");
+      } else {
+        await api("/api/routes", { method: "POST", body });
+        flash("Rota criada com sucesso.");
+      }
       renderView();
       return;
     }
@@ -1004,6 +1027,41 @@ async function importEmployees(form) {
   });
 
   flash(`Importação concluída: ${result.batch.inserted} inseridos, ${result.batch.updated} atualizados, ${result.batch.errors} erros.`);
+}
+
+function routePayloadFromForm(formData) {
+  return {
+    name: formData.get("name"),
+    description: formData.get("description"),
+    fiscalId: formData.get("fiscalId"),
+    supervisorId: formData.get("supervisorId"),
+    unit: formData.get("unit"),
+    client: formData.get("client"),
+    frequency: formData.get("frequency"),
+    scheduledTime: formData.get("scheduledTime"),
+    services: splitFormList(formData.get("services")),
+    status: formData.get("status"),
+    requiresPhoto: formData.has("requiresPhoto"),
+    requiresGeolocation: formData.has("requiresGeolocation"),
+    deadlineHours: Number(formData.get("deadlineHours") || 4),
+    points: parseRoutePointsInput(formData.get("points")),
+    observations: formData.get("observations")
+  };
+}
+
+function parseRoutePointsInput(value) {
+  return String(value || "").split(/\r?\n/).map((line, index) => {
+    const [name, checklist = "Presença no posto; Uniforme e EPIs; Registro de ocorrências"] = line.split("|");
+    return {
+      order: index + 1,
+      name: name.trim(),
+      checklist: splitFormList(checklist)
+    };
+  }).filter((point) => point.name);
+}
+
+function splitFormList(value) {
+  return String(value || "").split(/[;,]/).map((item) => item.trim()).filter(Boolean);
 }
 
 async function downloadReport(type, format) {
@@ -1119,7 +1177,7 @@ function importBox() {
   return `
     <form id="employee-import-form" class="panel" style="margin-bottom:16px">
       <h2>Importar planilha</h2>
-      <p class="subtle">Aceita CSV, TSV, Google Sheets exportado e XLSX simples. Deduplica por CPF ou matricula e cria historico automaticamente.</p>
+      <p class="subtle">Aceita CSV, TSV, Google Sheets exportado e XLSX simples, incluindo a planilha funcionários_basico. Deduplica por CPF ou matrícula e cria histórico automaticamente.</p>
       <div class="row">
         <input type="file" name="file" accept=".csv,.tsv,.txt,.xlsx" required>
         <button class="btn primary" type="submit">Importar e validar</button>
@@ -1128,8 +1186,44 @@ function importBox() {
   `;
 }
 
-function routeCard(route) {
+function routeForm(route, users) {
+  const isEdit = Boolean(route);
+  const formId = isEdit ? "" : `id="route-create-form"`;
+  const dataAttrs = isEdit ? `data-form="route-edit-form" data-id="${h(route.id)}"` : "";
+  const title = isEdit ? "Editar rota" : "Criar nova rota";
+  return `
+    <form ${formId} ${dataAttrs} class="panel" style="margin-bottom:16px">
+      <h2>${title}</h2>
+      <div class="grid two">
+        ${routeInput("name", "Nome da rota", route?.name || "", "Rota Shopping Norte")}
+        ${routeInput("unit", "Unidade", route?.unit || "", "Shopping Norte")}
+        ${selectField("fiscalId", "Fiscal", routeUserOptions(users, "FISCAL_OPERACIONAL"), route?.fiscalId)}
+        ${selectField("supervisorId", "Supervisor", routeUserOptions(users, "SUPERVISOR_OPERACIONAL"), route?.supervisorId)}
+        ${routeInput("scheduledTime", "Horário", route?.scheduledTime || "", "08:00", "time")}
+        ${selectField("frequency", "Frequência", ["Diaria", "Semanal", "Quinzenal", "Mensal"], route?.frequency || "Diaria")}
+        ${routeInput("client", "Cliente", route?.client || "", route?.unit || "Shopping Norte")}
+        ${routeInput("deadlineHours", "Prazo em horas", route?.deadlineHours || 4, "4", "number")}
+        ${isEdit ? selectField("status", "Status", ["Programada", "Em andamento", "Atrasada", "Concluida", "Cancelada"], route.status || "Programada") : ""}
+      </div>
+      <div class="field"><label>Descrição</label><input name="description" value="${h(route?.description || "")}" placeholder="Objetivo da fiscalização"></div>
+      <div class="field"><label>Serviços</label><input name="services" value="${h((route?.services || []).join(", "))}" placeholder="Portaria, Vigilância patrimonial, CFTV"></div>
+      <div class="field"><label>Pontos da rota</label><textarea name="points" rows="4" placeholder="Portaria 1 | Presença no posto; Uniforme; Livro de ocorrência&#10;CFTV | Equipamentos ligados; Registro de falhas">${h(routePointsText(route))}</textarea></div>
+      <div class="field"><label>Observações</label><textarea name="observations" rows="2">${h(route?.observations || "")}</textarea></div>
+      <div class="row">
+        <label class="row"><input type="checkbox" name="requiresPhoto" ${route?.requiresPhoto ? "checked" : ""}> Exigir foto</label>
+        <label class="row"><input type="checkbox" name="requiresGeolocation" ${route?.requiresGeolocation ? "checked" : ""}> Exigir geolocalização</label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" type="submit">${isEdit ? "Salvar alterações" : "Criar rota"}</button>
+        ${isEdit ? `<button class="btn ghost" type="button" data-action="route-cancel-edit">Cancelar</button>` : ""}
+      </div>
+    </form>
+  `;
+}
+
+function routeCard(route, users = []) {
   const canStart = ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL"].includes(state.user.role);
+  const canEdit = state.user.role === "ADMIN_OPERACIONAL";
   return `
     <article class="item">
       <div class="row space-between">
@@ -1143,6 +1237,7 @@ function routeCard(route) {
         ${(route.points || []).map((point) => `<div class="item"><strong>${point.order}. ${h(point.name)}</strong><br><span class="subtle">${h(point.checklist.join(" · "))}</span></div>`).join("")}
       </div>
       ${canStart ? `<button class="btn primary" data-action="route-start" data-id="${h(route.id)}">Iniciar rota</button>` : ""}
+      ${canEdit ? routeForm(route, users) : ""}
     </article>
   `;
 }
@@ -1219,8 +1314,28 @@ function inputField(name, label, placeholder, type = "text") {
   return `<div class="field"><label>${h(label)}</label><input name="${h(name)}" type="${h(type)}" ${type === "date" ? `value="${h(placeholder)}"` : `placeholder="${h(placeholder)}"`} required></div>`;
 }
 
-function selectField(name, label, values) {
-  return `<div class="field"><label>${h(label)}</label><select name="${h(name)}" required><option value="">Selecione</option>${values.map((value) => `<option value="${h(value)}">${h(value)}</option>`).join("")}</select></div>`;
+function routeInput(name, label, value = "", placeholder = "", type = "text") {
+  return `<div class="field"><label>${h(label)}</label><input name="${h(name)}" type="${h(type)}" value="${h(value)}" placeholder="${h(placeholder)}" required></div>`;
+}
+
+function routeUserOptions(users, role) {
+  return users
+    .filter((user) => user.role === role && user.status === "Ativo")
+    .map((user) => [user.id, `${user.name} · ${user.email}`]);
+}
+
+function routePointsText(route) {
+  return (route?.points || [])
+    .map((point) => `${point.name} | ${(point.checklist || []).join("; ")}`)
+    .join("\n");
+}
+
+function selectField(name, label, values, selected = "") {
+  return `<div class="field"><label>${h(label)}</label><select name="${h(name)}" required><option value="">Selecione</option>${values.map((option) => {
+    const value = Array.isArray(option) ? option[0] : option;
+    const text = Array.isArray(option) ? option[1] : option;
+    return `<option value="${h(value)}" ${String(value) === String(selected) ? "selected" : ""}>${h(text)}</option>`;
+  }).join("")}</select></div>`;
 }
 
 function employeeSelect(employees) {

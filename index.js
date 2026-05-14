@@ -239,6 +239,12 @@ async function routeApi(request, response, url) {
     return;
   }
 
+  if (request.method === "PATCH" && matchPath(url.pathname, "/api/routes/:id")) {
+    requireRole(user, ["ADMIN_OPERACIONAL"], response);
+    await updateRoute(request, response, data, user, pathId(url.pathname, 3));
+    return;
+  }
+
   if (request.method === "POST" && matchPath(url.pathname, "/api/routes/:id/start")) {
     await startRoute(request, response, data, user, pathId(url.pathname, 3));
     return;
@@ -471,7 +477,8 @@ async function importEmployees(request, response, data, user) {
 
     const existing = data.employees.find((employee) =>
       employee.deletedAt == null &&
-      (normalizeCpf(employee.cpf) === normalizeCpf(normalized.cpf) || clean(employee.enrollment) === clean(normalized.enrollment))
+      ((normalizeCpf(employee.cpf) && normalizeCpf(normalized.cpf) && normalizeCpf(employee.cpf) === normalizeCpf(normalized.cpf)) ||
+        clean(employee.enrollment) === clean(normalized.enrollment))
     );
 
     if (existing) {
@@ -556,28 +563,11 @@ async function createRoute(request, response, data, user) {
     return;
   }
 
-  const fiscal = data.users.find((candidate) => candidate.id === body.fiscalId);
-  const supervisor = data.users.find((candidate) => candidate.id === body.supervisorId);
+  const routeData = normalizeRoutePayload(body, data);
   const route = {
     id: id("rot"),
-    name: clean(body.name),
-    description: clean(body.description),
-    fiscalId: body.fiscalId,
-    fiscalName: fiscal?.name ?? "",
-    supervisorId: body.supervisorId,
-    supervisorName: supervisor?.name ?? "",
-    unit: clean(body.unit),
-    client: clean(body.client ?? body.unit),
-    frequency: clean(body.frequency ?? "Diaria"),
-    weekDays: Array.isArray(body.weekDays) ? body.weekDays : [],
-    scheduledTime: clean(body.scheduledTime),
-    services: Array.isArray(body.services) ? body.services : [],
+    ...routeData,
     status: "Programada",
-    requiresPhoto: Boolean(body.requiresPhoto),
-    requiresGeolocation: Boolean(body.requiresGeolocation),
-    deadlineHours: Number(body.deadlineHours ?? 4),
-    points: Array.isArray(body.points) ? body.points : [],
-    observations: clean(body.observations),
     createdAt: new Date().toISOString()
   };
   data.routes.push(route);
@@ -585,6 +575,30 @@ async function createRoute(request, response, data, user) {
   audit(data, user, "routes.create", "Route", route.id, `Rota criada: ${route.name}.`);
   await writeData(data);
   sendJson(response, 201, { route });
+}
+
+async function updateRoute(request, response, data, user, routeId) {
+  const body = await readJson(request);
+  const route = data.routes.find((candidate) => candidate.id === routeId);
+  if (!route) {
+    sendJson(response, 404, { error: "Rota nao encontrada", message: "A rota solicitada nao existe." });
+    return;
+  }
+
+  const validation = required(body, ["name", "fiscalId", "supervisorId", "unit", "scheduledTime"]);
+  if (validation.length > 0) {
+    sendValidation(response, validation);
+    return;
+  }
+
+  const routeData = normalizeRoutePayload(body, data);
+  Object.assign(route, routeData, {
+    status: clean(body.status) || route.status || "Programada",
+    updatedAt: new Date().toISOString()
+  });
+  audit(data, user, "routes.update", "Route", route.id, `Rota atualizada: ${route.name}.`);
+  await writeData(data);
+  sendJson(response, 200, { route });
 }
 
 async function startRoute(request, response, data, user, routeId) {
@@ -1052,14 +1066,17 @@ function summarizeEmployees(employees, settings = {}) {
 
 function normalizeEmployeeRow(row) {
   const status = normalizeStatus(row.status, row.terminationDate);
+  const unit = clean(row.unit ?? row.centroDeCusto ?? row.costCenter ?? row.filial) || "Unidade nao informada";
+  const workPost = clean(row.workPost ?? row.posto ?? row.filial);
+  const serviceType = clean(row.serviceType ?? row.tipoDeServico ?? row.service ?? inferServiceType(row.position));
   return {
-    enrollment: clean(row.enrollment),
-    fullName: clean(row.fullName),
+    enrollment: clean(row.enrollment) || `CPF-${normalizeCpf(row.cpf) || row._rowNumber}`,
+    fullName: clean(row.fullName) || `Funcionario ${clean(row.enrollment) || normalizeCpf(row.cpf) || row._rowNumber}`,
     cpf: normalizeCpf(row.cpf),
-    position: clean(row.position),
-    serviceType: clean(row.serviceType),
-    unit: clean(row.unit),
-    workPost: clean(row.workPost),
+    position: clean(row.position) || "Nao informado",
+    serviceType,
+    unit,
+    workPost,
     shiftScale: clean(row.shiftScale),
     workHours: clean(row.workHours),
     admissionDate: normalizeDate(row.admissionDate),
@@ -1067,8 +1084,8 @@ function normalizeEmployeeRow(row) {
     status,
     supervisorId: "",
     supervisorName: clean(row.supervisorName),
-    company: clean(row.company),
-    contract: clean(row.contract),
+    company: clean(row.company ?? row.empresa),
+    contract: clean(row.contract ?? row.contrato ?? row.centroDeCusto),
     contractEndDate: normalizeDate(row.contractEndDate),
     phone: clean(row.phone),
     email: clean(row.email).toLowerCase(),
@@ -1076,17 +1093,26 @@ function normalizeEmployeeRow(row) {
   };
 }
 
+function inferServiceType(position) {
+  const value = clean(position).toLowerCase();
+  if (value.includes("vigil")) return "Vigilancia patrimonial";
+  if (value.includes("port")) return "Portaria";
+  if (value.includes("limp") || value.includes("auxiliar")) return "Servicos gerais";
+  if (value.includes("insp")) return "Inspecao operacional";
+  if (value.includes("monitor") || value.includes("cftv")) return "CFTV / monitoramento";
+  if (value.includes("manut")) return "Manutencao predial";
+  return clean(position) || "Apoio operacional";
+}
+
 function validateEmployee(employee) {
   const errors = [];
   if (!employee.enrollment) errors.push("Matricula obrigatoria.");
   if (!employee.fullName) errors.push("Nome completo obrigatorio.");
-  if (!employee.cpf || employee.cpf.length !== 11) errors.push("CPF obrigatorio com 11 digitos.");
   if (!employee.position) errors.push("Cargo obrigatorio.");
   if (!employee.serviceType) errors.push("Tipo de servico obrigatorio.");
   if (!employee.unit) errors.push("Unidade obrigatoria.");
   if (!employee.status) errors.push("Status obrigatorio.");
   if (employee.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employee.email)) errors.push("E-mail invalido.");
-  if (employee.status === "Inativo" && !employee.terminationDate) errors.push("Data de demissao obrigatoria para funcionario inativo.");
   return errors;
 }
 
@@ -1126,6 +1152,57 @@ function createMovementFromDiff(data, before, after, user) {
       status: "Confirmada"
     });
   }
+}
+
+function normalizeRoutePayload(body, data) {
+  const fiscal = data.users.find((candidate) => candidate.id === body.fiscalId);
+  const supervisor = data.users.find((candidate) => candidate.id === body.supervisorId);
+  return {
+    name: clean(body.name),
+    description: clean(body.description),
+    fiscalId: clean(body.fiscalId),
+    fiscalName: fiscal?.name ?? "",
+    supervisorId: clean(body.supervisorId),
+    supervisorName: supervisor?.name ?? "",
+    unit: clean(body.unit),
+    client: clean(body.client ?? body.unit),
+    frequency: clean(body.frequency ?? "Diaria"),
+    weekDays: Array.isArray(body.weekDays) ? body.weekDays.map(clean).filter(Boolean) : splitList(body.weekDays),
+    scheduledTime: clean(body.scheduledTime),
+    services: Array.isArray(body.services) ? body.services.map(clean).filter(Boolean) : splitList(body.services),
+    requiresPhoto: Boolean(body.requiresPhoto),
+    requiresGeolocation: Boolean(body.requiresGeolocation),
+    deadlineHours: Math.max(1, Number(body.deadlineHours ?? 4) || 4),
+    points: normalizeRoutePoints(body.points),
+    observations: clean(body.observations)
+  };
+}
+
+function normalizeRoutePoints(points) {
+  const source = Array.isArray(points) ? points : parseRoutePoints(points);
+  return source.map((point, index) => ({
+    id: clean(point.id) || id("poi"),
+    order: Number(point.order ?? index + 1),
+    name: clean(point.name) || `Ponto ${index + 1}`,
+    locationHint: clean(point.locationHint),
+    checklist: Array.isArray(point.checklist)
+      ? point.checklist.map(clean).filter(Boolean)
+      : splitList(point.checklist)
+  })).filter((point) => point.name);
+}
+
+function parseRoutePoints(value) {
+  return String(value ?? "").split(/\r?\n/).map((line) => {
+    const [name, checklist = "Presenca no posto; Uniforme e EPIs; Registro de ocorrencias"] = line.split("|");
+    return {
+      name,
+      checklist: splitList(checklist)
+    };
+  }).filter((point) => clean(point.name));
+}
+
+function splitList(value) {
+  return String(value ?? "").split(/[;,]/).map(clean).filter(Boolean);
 }
 
 function scopeCollection(data, collection, user) {
@@ -1304,7 +1381,8 @@ function defaultViewForRole(role) {
 }
 
 function normalizeCpf(value) {
-  return String(value ?? "").replace(/\D/g, "");
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length === 10 ? digits.padStart(11, "0") : digits;
 }
 
 function normalizeStatus(status, terminationDate) {
