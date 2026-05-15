@@ -25,6 +25,13 @@ const sessions = new Map();
 const failedLogins = new Map();
 const jsonLimitBytes = 16 * 1024 * 1024;
 let cachedData = null;
+const defaultNotificationEmails = [
+  "gestao@argosvig.com.br",
+  "operacao.adm@argosvig.com.br",
+  "apoio.operacional@argosvig.com.br",
+  "supervisor.adm@argosvig.com.br"
+];
+const defaultChatbotWelcome = "Olá, sou o Assistente Operacional. O que você deseja fazer agora?";
 
 const reportDefinitions = {
   employees: {
@@ -205,6 +212,14 @@ async function routeApi(request, response, url) {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/chatbot/config") {
+    ensureOperationalConfig(data);
+    sendJson(response, 200, {
+      chatbotWelcome: data.settings.chatbotWelcome
+    });
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/dashboard") {
     sendJson(response, 200, buildDashboard(data, user));
     return;
@@ -315,6 +330,28 @@ async function routeApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/audit") {
     requireRole(user, ["ADMIN_OPERACIONAL"], response);
     sendJson(response, 200, { auditLogs: data.auditLogs.slice(-300).reverse() });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/settings") {
+    requireRole(user, ["ADMIN_OPERACIONAL"], response);
+    ensureOperationalConfig(data);
+    sendJson(response, 200, {
+      settings: data.settings,
+      emailOutbox: (data.emailOutbox || []).slice(-50).reverse()
+    });
+    return;
+  }
+
+  if (request.method === "PATCH" && url.pathname === "/api/settings") {
+    requireRole(user, ["ADMIN_OPERACIONAL"], response);
+    await updateSettings(request, response, data, user);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/notifications/operational-summary") {
+    requireRole(user, ["ADMIN_OPERACIONAL"], response);
+    await sendOperationalSummary(response, data, user);
     return;
   }
 
@@ -545,6 +582,16 @@ async function importEmployees(request, response, data, user) {
   data.importErrors.push(...rowErrors);
   data.notices.push(...notices);
   audit(data, user, "employees.import", "ImportBatch", batch.id, `Importacao ${fileName}: ${batch.inserted} inseridos, ${batch.updated} atualizados, ${batch.errors} erros.`);
+  await notifyOperationalRecord(data, user, "Importacao", `Importacao de funcionarios: ${fileName}`, [
+    `Arquivo: ${fileName}`,
+    `Total de linhas: ${batch.totalRows}`,
+    `Inseridos: ${batch.inserted}`,
+    `Atualizados: ${batch.updated}`,
+    `Ignorados: ${batch.ignored}`,
+    `Erros: ${batch.errors}`,
+    `Ativos no arquivo: ${batch.active}`,
+    `Inativos no arquivo: ${batch.inactive}`
+  ]);
   await writeData(data);
 
   sendJson(response, 201, {
@@ -573,6 +620,7 @@ async function createRoute(request, response, data, user) {
   data.routes.push(route);
   data.notices.push(autoNotice("Rotas", `Nova rota criada: ${route.name}`, `A rota ${route.name} foi criada para ${route.unit}.`, "Normal"));
   audit(data, user, "routes.create", "Route", route.id, `Rota criada: ${route.name}.`);
+  await notifyOperationalRecord(data, user, "Rota", `Rota criada: ${route.name}`, routeEmailLines(route));
   await writeData(data);
   sendJson(response, 201, { route });
 }
@@ -597,6 +645,7 @@ async function updateRoute(request, response, data, user, routeId) {
     updatedAt: new Date().toISOString()
   });
   audit(data, user, "routes.update", "Route", route.id, `Rota atualizada: ${route.name}.`);
+  await notifyOperationalRecord(data, user, "Rota", `Rota atualizada: ${route.name}`, routeEmailLines(route));
   await writeData(data);
   sendJson(response, 200, { route });
 }
@@ -633,6 +682,13 @@ async function startRoute(request, response, data, user, routeId) {
   };
   data.inspections.push(inspection);
   audit(data, user, "routes.start", "Inspection", inspection.id, `Fiscalizacao iniciada: ${route.name}.`);
+  await notifyOperationalRecord(data, user, "Rota", `Fiscalizacao iniciada: ${route.name}`, [
+    `Rota: ${route.name}`,
+    `Unidade: ${route.unit}`,
+    `Fiscal: ${inspection.fiscalName}`,
+    `Supervisor: ${inspection.supervisorName}`,
+    `Inicio: ${inspection.startedAt}`
+  ]);
   await writeData(data);
   sendJson(response, 201, { inspection, route });
 }
@@ -675,6 +731,13 @@ async function visitInspectionPoint(request, response, data, user, inspectionId)
   });
 
   audit(data, user, "routes.visit_point", "Inspection", inspection.id, `Ponto visitado: ${point.name}.`);
+  await notifyOperationalRecord(data, user, "Rota", `Ponto visitado: ${point.name}`, [
+    `Rota: ${inspection.routeName}`,
+    `Ponto: ${point.name}`,
+    `Fiscal: ${inspection.fiscalName}`,
+    `Visitados: ${inspection.visitedCount}`,
+    `Localizacao: ${clean(body.location) || "Nao informada"}`
+  ]);
   await writeData(data);
   sendJson(response, 200, { inspection });
 }
@@ -696,6 +759,16 @@ async function finishInspection(request, response, data, user, inspectionId) {
   }
 
   audit(data, user, "routes.finish", "Inspection", inspection.id, `Fiscalizacao finalizada: ${inspection.status}.`);
+  await notifyOperationalRecord(data, user, "Rota", `Fiscalizacao finalizada: ${inspection.routeName}`, [
+    `Rota: ${inspection.routeName}`,
+    `Unidade: ${inspection.unit}`,
+    `Fiscal: ${inspection.fiscalName}`,
+    `Supervisor: ${inspection.supervisorName}`,
+    `Status: ${inspection.status}`,
+    `Pontos visitados: ${inspection.visitedCount}`,
+    `Inicio: ${inspection.startedAt}`,
+    `Fim: ${inspection.finishedAt}`
+  ]);
   await writeData(data);
   sendJson(response, 200, { inspection, route });
 }
@@ -953,6 +1026,15 @@ async function createMovement(request, response, data, user) {
   }
   employee.updatedAt = new Date().toISOString();
   audit(data, user, "movements.create", "EmployeeMovement", movement.id, `Movimentacao registrada: ${movement.type}.`);
+  await notifyOperationalRecord(data, user, "Movimentacao", `Movimentacao registrada: ${movement.employeeName}`, [
+    `Funcionario: ${movement.employeeName}`,
+    `Tipo: ${movement.type}`,
+    `Data: ${movement.date}`,
+    `Motivo: ${movement.reason}`,
+    `De: ${movement.previousUnit || "-"} / ${movement.previousPost || "-"}`,
+    `Para: ${movement.newUnit || "-"} / ${movement.newPost || "-"}`,
+    `Registrado por: ${user.name}`
+  ]);
   await writeData(data);
   sendJson(response, 201, { movement, employee });
 }
@@ -986,6 +1068,12 @@ async function exportReport(request, response, data, user, reportType, searchPar
   const headers = definition.headers.map(([key, label]) => ({ key, label }));
   const format = searchParams.get("format") ?? "json";
   audit(data, user, "reports.export", "Report", reportType, `Relatorio exportado: ${definition.title} (${format}).`);
+  await notifyOperationalRecord(data, user, "Exportacao", `Exportacao de relatorio: ${definition.title}`, [
+    `Relatorio: ${definition.title}`,
+    `Formato: ${format}`,
+    `Registros exportados: ${records.length}`,
+    `Solicitante: ${user.name}`
+  ]);
   await writeData(data);
 
   if (format === "csv") {
@@ -1006,7 +1094,73 @@ async function exportReport(request, response, data, user, reportType, searchPar
   sendJson(response, 200, { title: definition.title, records, headers });
 }
 
+async function updateSettings(request, response, data, user) {
+  const body = await readJson(request);
+  ensureOperationalConfig(data);
+
+  if (body.chatbotWelcome != null) {
+    data.settings.chatbotWelcome = clean(body.chatbotWelcome) || defaultChatbotWelcome;
+  }
+
+  if (body.notificationEmails != null) {
+    const emails = normalizeEmails(Array.isArray(body.notificationEmails) ? body.notificationEmails : splitList(body.notificationEmails));
+    if (emails.length === 0) {
+      sendJson(response, 422, {
+        error: "Validacao",
+        message: "Informe ao menos um e-mail valido para notificacoes operacionais."
+      });
+      return;
+    }
+    data.settings.notificationEmails = emails;
+  }
+
+  audit(data, user, "settings.update", "Settings", "operational", "Configuracoes operacionais atualizadas.");
+  await writeData(data);
+  sendJson(response, 200, {
+    settings: data.settings,
+    emailOutbox: (data.emailOutbox || []).slice(-50).reverse()
+  });
+}
+
+async function sendOperationalSummary(response, data, user) {
+  ensureOperationalConfig(data);
+  const dashboard = buildDashboard(data, user);
+  const recentImports = [...(data.importBatches || [])].slice(-25).reverse();
+  const recentExports = [...(data.auditLogs || [])].filter((log) => log.action === "reports.export").slice(-25).reverse();
+  const recentRoutes = [...(data.auditLogs || [])].filter((log) => String(log.action).startsWith("routes.")).slice(-50).reverse();
+  const recentMovements = [...(data.employeeMovements || [])].slice(-50).reverse();
+
+  const lines = [
+    "Resumo do dashboard",
+    `Funcionarios ativos: ${dashboard.metrics.activeEmployees}`,
+    `Funcionarios inativos: ${dashboard.metrics.inactiveEmployees}`,
+    `Rotas programadas: ${dashboard.metrics.scheduledRoutes}`,
+    `Rotas em andamento: ${dashboard.metrics.runningRoutes}`,
+    `Rotas atrasadas: ${dashboard.metrics.delayedRoutes}`,
+    `Ocorrencias abertas: ${dashboard.metrics.openOccurrences}`,
+    `Servicos vencidos: ${dashboard.metrics.overdueServices}`,
+    "",
+    "Ultimas rotas",
+    ...recentRoutes.map((log) => `- ${formatDateTime(log.createdAt)} | ${log.actorName} | ${log.details}`),
+    "",
+    "Ultimas importacoes",
+    ...recentImports.map((batch) => `- ${formatDateTime(batch.finishedAt || batch.startedAt)} | ${batch.fileName} | ${batch.inserted} inseridos, ${batch.updated} atualizados, ${batch.errors} erros`),
+    "",
+    "Ultimas exportacoes",
+    ...recentExports.map((log) => `- ${formatDateTime(log.createdAt)} | ${log.actorName} | ${log.details}`),
+    "",
+    "Ultimas movimentacoes de funcionarios",
+    ...recentMovements.map((movement) => `- ${movement.date} | ${movement.employeeName} | ${movement.type} | ${movement.reason}`)
+  ];
+
+  const notification = await notifyOperationalRecord(data, user, "Resumo operacional", "FiscalizaPro - registros operacionais", lines);
+  audit(data, user, "notifications.summary", "Email", notification.id, "Resumo operacional enviado para a lista configurada.");
+  await writeData(data);
+  sendJson(response, 201, { notification });
+}
+
 function buildDashboard(data, user) {
+  ensureOperationalConfig(data);
   const employees = scopeEmployees(data.employees, user);
   const routes = scopeRoutes(data.routes, user);
   const occurrences = scopeOccurrences(data.occurrences, user);
@@ -1014,24 +1168,28 @@ function buildDashboard(data, user) {
   const movements = scopeMovements(data.employeeMovements, data.employees, user);
   const now = new Date();
   const month = now.toISOString().slice(0, 7);
+  const admissionMovements = movements.filter((movement) => normalizedKey(movement.type) === "admissao");
+  const terminationMovements = movements.filter((movement) => normalizedKey(movement.type) === "demissao");
+  const metrics = {
+    activeEmployees: employees.filter((employee) => employee.status === "Ativo").length,
+    inactiveEmployees: employees.filter((employee) => employee.status === "Inativo").length,
+    monthAdmissions: admissionMovements.filter((movement) => String(movement.date).startsWith(month)).length,
+    monthTerminations: terminationMovements.filter((movement) => String(movement.date).startsWith(month)).length,
+    scheduledRoutes: routes.filter((route) => route.status === "Programada").length,
+    runningRoutes: routes.filter((route) => route.status === "Em andamento").length,
+    finishedRoutes: routes.filter((route) => route.status.startsWith("Concluida")).length,
+    delayedRoutes: routes.filter((route) => route.status === "Atrasada").length,
+    openOccurrences: occurrences.filter((occurrence) => !["Resolvida", "Cancelada"].includes(occurrence.status)).length,
+    criticalOccurrences: occurrences.filter((occurrence) => occurrence.priority === "Critica" || occurrence.status === "Critica").length,
+    openServices: serviceTasks.filter((task) => ["Aberto", "Em andamento", "Aguardando validacao"].includes(task.status)).length,
+    overdueServices: serviceTasks.filter((task) => isOverdue(task.dueDate) && !["Resolvido", "Cancelado"].includes(task.status)).length,
+    finishedServices: serviceTasks.filter((task) => task.status === "Resolvido").length,
+    expiringContracts: employees.filter((employee) => futureWithinDays(employee.contractEndDate, data.settings?.contractWarningDays ?? 30)).length
+  };
 
   return {
-    metrics: {
-      activeEmployees: employees.filter((employee) => employee.status === "Ativo").length,
-      inactiveEmployees: employees.filter((employee) => employee.status === "Inativo").length,
-      monthAdmissions: movements.filter((movement) => movement.type === "Admissao" && String(movement.date).startsWith(month)).length,
-      monthTerminations: movements.filter((movement) => movement.type === "Demissao" && String(movement.date).startsWith(month)).length,
-      scheduledRoutes: routes.filter((route) => route.status === "Programada").length,
-      runningRoutes: routes.filter((route) => route.status === "Em andamento").length,
-      finishedRoutes: routes.filter((route) => route.status.startsWith("Concluida")).length,
-      delayedRoutes: routes.filter((route) => route.status === "Atrasada").length,
-      openOccurrences: occurrences.filter((occurrence) => !["Resolvida", "Cancelada"].includes(occurrence.status)).length,
-      criticalOccurrences: occurrences.filter((occurrence) => occurrence.priority === "Critica" || occurrence.status === "Critica").length,
-      openServices: serviceTasks.filter((task) => ["Aberto", "Em andamento", "Aguardando validacao"].includes(task.status)).length,
-      overdueServices: serviceTasks.filter((task) => isOverdue(task.dueDate) && !["Resolvido", "Cancelado"].includes(task.status)).length,
-      finishedServices: serviceTasks.filter((task) => task.status === "Resolvido").length,
-      expiringContracts: employees.filter((employee) => futureWithinDays(employee.contractEndDate, data.settings?.contractWarningDays ?? 30)).length
-    },
+    metrics,
+    summary: buildDashboardSummary(metrics, data, { employees, routes, occurrences, serviceTasks, movements }),
     charts: {
       employeesByService: groupCount(employees.filter((employee) => employee.status === "Ativo"), "serviceType"),
       employeesByUnit: groupCount(employees.filter((employee) => employee.status === "Ativo"), "unit"),
@@ -1040,13 +1198,66 @@ function buildDashboard(data, user) {
       routesByStatus: groupCount(routes, "status"),
       servicesByPriority: groupCount(serviceTasks, "priority"),
       admissionsTerminations: [
-        { label: "Admissoes", value: movements.filter((movement) => movement.type === "Admissao").length },
-        { label: "Demissoes", value: movements.filter((movement) => movement.type === "Demissao").length }
+        { label: "Admissoes", value: admissionMovements.length },
+        { label: "Demissoes", value: terminationMovements.length }
       ],
       topUnitsByOccurrences: topN(groupCount(occurrences, "unit"), 5),
       supervisorsByPending: topN(groupCount(serviceTasks.filter((task) => !["Resolvido", "Cancelado"].includes(task.status)), "responsibleName"), 5),
       monthlyInspections: groupByMonth(data.inspections, "startedAt")
     }
+  };
+}
+
+function buildDashboardSummary(metrics, data, scoped) {
+  const totalEmployees = metrics.activeEmployees + metrics.inactiveEmployees;
+  const totalRoutes = scoped.routes.length;
+  const healthyRoutes = Math.max(0, totalRoutes - metrics.delayedRoutes);
+  const totalOperationalIssues = metrics.openOccurrences + metrics.openServices + metrics.delayedRoutes;
+  const lastImport = [...(data.importBatches || [])].sort((a, b) => String(b.finishedAt || b.startedAt).localeCompare(String(a.finishedAt || a.startedAt)))[0];
+  const lastExport = [...(data.auditLogs || [])].filter((log) => log.action === "reports.export").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+
+  return {
+    headline: totalOperationalIssues > 0
+      ? `${totalOperationalIssues} pendencias operacionais exigem acompanhamento.`
+      : "Operacao sem pendencias criticas no escopo atual.",
+    cards: [
+      {
+        label: "Base de funcionarios",
+        value: totalEmployees,
+        detail: `${metrics.activeEmployees} ativos e ${metrics.inactiveEmployees} inativos`
+      },
+      {
+        label: "Saude das rotas",
+        value: `${healthyRoutes}/${totalRoutes}`,
+        detail: `${metrics.runningRoutes} em andamento e ${metrics.delayedRoutes} atrasadas`
+      },
+      {
+        label: "Movimentacoes do mes",
+        value: metrics.monthAdmissions + metrics.monthTerminations,
+        detail: `${metrics.monthAdmissions} admissoes e ${metrics.monthTerminations} demissoes`
+      },
+      {
+        label: "Alertas abertos",
+        value: totalOperationalIssues,
+        detail: `${metrics.openOccurrences} ocorrencias, ${metrics.openServices} servicos e ${metrics.delayedRoutes} rotas atrasadas`
+      },
+      {
+        label: "Contratos a vencer",
+        value: metrics.expiringContracts,
+        detail: `Janela de ${data.settings?.contractWarningDays ?? 30} dias`
+      },
+      {
+        label: "Ultima troca de dados",
+        value: lastImport ? formatDate(lastImport.finishedAt || lastImport.startedAt) : "Sem importacao",
+        detail: lastExport ? `Ultima exportacao: ${formatDateTime(lastExport.createdAt)}` : "Nenhuma exportacao registrada"
+      }
+    ],
+    attention: [
+      metrics.criticalOccurrences > 0 ? `${metrics.criticalOccurrences} ocorrencia(s) critica(s) aberta(s).` : "",
+      metrics.overdueServices > 0 ? `${metrics.overdueServices} servico(s) vencido(s).` : "",
+      metrics.delayedRoutes > 0 ? `${metrics.delayedRoutes} rota(s) atrasada(s).` : "",
+      metrics.expiringContracts > 0 ? `${metrics.expiringContracts} contrato(s) proximo(s) do vencimento.` : ""
+    ].filter(Boolean)
   };
 }
 
@@ -1202,7 +1413,7 @@ function parseRoutePoints(value) {
 }
 
 function splitList(value) {
-  return String(value ?? "").split(/[;,]/).map(clean).filter(Boolean);
+  return String(value ?? "").split(/[;,\n]/).map(clean).filter(Boolean);
 }
 
 function scopeCollection(data, collection, user) {
@@ -1352,6 +1563,89 @@ function autoNotice(category, title, body, priority) {
   };
 }
 
+function ensureOperationalConfig(data) {
+  data.settings = data.settings || {};
+  data.settings.chatbotWelcome = clean(data.settings.chatbotWelcome) || defaultChatbotWelcome;
+  data.settings.notificationEmails = normalizeEmails(data.settings.notificationEmails || defaultNotificationEmails);
+  if (data.settings.notificationEmails.length === 0) {
+    data.settings.notificationEmails = [...defaultNotificationEmails];
+  }
+  data.emailOutbox = Array.isArray(data.emailOutbox) ? data.emailOutbox : [];
+}
+
+function normalizeEmails(values) {
+  return [...new Set((Array.isArray(values) ? values : splitList(values))
+    .map((email) => clean(email).toLowerCase())
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))];
+}
+
+function routeEmailLines(route) {
+  return [
+    `Rota: ${route.name}`,
+    `Unidade: ${route.unit}`,
+    `Cliente: ${route.client}`,
+    `Fiscal: ${route.fiscalName}`,
+    `Supervisor: ${route.supervisorName}`,
+    `Frequencia: ${route.frequency}`,
+    `Horario: ${route.scheduledTime}`,
+    `Status: ${route.status}`,
+    `Pontos: ${(route.points || []).map((point) => point.name).join(", ") || "Nao informados"}`
+  ];
+}
+
+async function notifyOperationalRecord(data, user, category, subject, lines) {
+  ensureOperationalConfig(data);
+  const notification = {
+    id: id("mail"),
+    category,
+    to: [...data.settings.notificationEmails],
+    subject,
+    body: [
+      subject,
+      "",
+      `Categoria: ${category}`,
+      `Responsavel: ${user?.name ?? "FiscalizaPro"}`,
+      `Data/hora: ${formatDateTime(new Date().toISOString())}`,
+      "",
+      ...(Array.isArray(lines) ? lines : [String(lines ?? "")])
+    ].join("\n"),
+    status: "Pendente de provedor",
+    provider: runtimeEnv.RESEND_API_KEY ? "resend" : "outbox",
+    error: "",
+    createdAt: new Date().toISOString(),
+    sentAt: ""
+  };
+
+  if (runtimeEnv.RESEND_API_KEY) {
+    try {
+      const result = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${runtimeEnv.RESEND_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: runtimeEnv.EMAIL_FROM || "FiscalizaPro <onboarding@resend.dev>",
+          to: notification.to,
+          subject: notification.subject,
+          text: notification.body
+        })
+      });
+      const payload = await result.json().catch(() => ({}));
+      notification.status = result.ok ? "Enviado" : "Falha";
+      notification.sentAt = result.ok ? new Date().toISOString() : "";
+      notification.providerMessageId = payload.id || "";
+      notification.error = result.ok ? "" : (payload.message || payload.error || "Falha no envio pelo provedor.");
+    } catch (error) {
+      notification.status = "Falha";
+      notification.error = error.message || "Falha no envio pelo provedor.";
+    }
+  }
+
+  data.emailOutbox.push(notification);
+  return notification;
+}
+
 function groupCount(records, key) {
   const map = new Map();
   records.forEach((record) => {
@@ -1447,6 +1741,13 @@ function formatDate(dateValue) {
   return `${day}/${month}/${year}`;
 }
 
+function formatDateTime(dateValue) {
+  if (!dateValue) return "data nao informada";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return String(dateValue);
+  return date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
 function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -1455,6 +1756,10 @@ function addDays(date, days) {
 
 function clean(value) {
   return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function normalizedKey(value) {
+  return clean(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function id(prefix) {

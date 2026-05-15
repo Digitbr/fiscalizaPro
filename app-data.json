@@ -590,6 +590,14 @@
     "sessionMinutes": 480,
     "loginLockoutAttempts": 5,
     "contractWarningDays": 30,
-    "experienceDays": 90
-  }
+    "experienceDays": 90,
+    "chatbotWelcome": "Olá, sou o Assistente Operacional. O que você deseja fazer agora?",
+    "notificationEmails": [
+      "gestao@argosvig.com.br",
+      "operacao.adm@argosvig.com.br",
+      "apoio.operacional@argosvig.com.br",
+      "supervisor.adm@argosvig.com.br"
+    ]
+  },
+  "emailOutbox": []
 }

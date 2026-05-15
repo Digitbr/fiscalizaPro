@@ -5,6 +5,7 @@ const state = {
   user: null,
   view: localStorage.getItem("fiscalizapro.view") || "dashboard",
   flash: null,
+  settings: null,
   filters: {
     employees: "",
     occurrences: "",
@@ -184,6 +185,7 @@ async function renderDashboard(content) {
   content.innerHTML = `
     ${pageHeader("Dashboard gerencial", "Indicadores consolidados com escopo aplicado ao perfil logado.")}
     ${flashHtml()}
+    ${dashboardSummary(dashboard.summary)}
     <section class="grid cards">
       ${metric("Funcionários ativos", metrics.activeEmployees, "Base operacional liberada")}
       ${metric("Funcionários inativos", metrics.inactiveEmployees, "Histórico preservado")}
@@ -405,13 +407,26 @@ async function renderUsers(content) {
 }
 
 async function renderSettings(content) {
-  const { auditLogs } = await api("/api/audit");
+  const [{ auditLogs }, settingsData] = await Promise.all([
+    api("/api/audit"),
+    api("/api/settings")
+  ]);
+  state.settings = settingsData.settings;
   content.innerHTML = `
     ${pageHeader("Configurações e auditoria", "Regras de segurança, sessão, upload, logs técnicos e logs de negócio.")}
     ${flashHtml()}
     <section class="grid two">
       <div class="panel">
-        <h2>Políticas ativas</h2>
+        <h2>Chatbot e e-mails operacionais</h2>
+        <form id="settings-form">
+          <div class="field"><label>Mensagem inicial do chatbot</label><textarea name="chatbotWelcome" rows="4" required>${h(settingsData.settings.chatbotWelcome)}</textarea></div>
+          <div class="field"><label>E-mails para registros operacionais</label><textarea name="notificationEmails" rows="4" required>${h((settingsData.settings.notificationEmails || []).join("\n"))}</textarea></div>
+          <div class="row">
+            <button class="btn primary" type="submit">Salvar configurações</button>
+            <button class="btn" type="button" data-action="send-operational-summary">Enviar resumo agora</button>
+          </div>
+        </form>
+        <h2 style="margin-top:18px">Políticas ativas</h2>
         <div class="list">
           ${policy("Sessão", "480 minutos por token local, invalidação no logout.")}
           ${policy("Login", "Bloqueio temporário após 5 tentativas incorretas.")}
@@ -421,6 +436,8 @@ async function renderSettings(content) {
         </div>
       </div>
       <div class="panel">
+        <h2>Fila de e-mails</h2>
+        <div class="list">${(settingsData.emailOutbox || []).slice(0, 10).map(emailItem).join("") || empty("Nenhum e-mail operacional registrado.")}</div>
         <h2>Últimos logs</h2>
         <div class="list">${auditLogs.slice(0, 30).map(auditItem).join("")}</div>
       </div>
@@ -429,7 +446,8 @@ async function renderSettings(content) {
 }
 
 async function renderChatbot(content) {
-  ensureChatbotWelcome();
+  const config = await api("/api/chatbot/config");
+  ensureChatbotWelcome(config);
   content.innerHTML = `
     ${pageHeader("Chatbot operacional", "Interface guiada para fiscalização, ocorrências, rotas, serviços, consultas e avisos.")}
     ${flashHtml()}
@@ -459,9 +477,9 @@ async function renderChatbot(content) {
   scrollChat();
 }
 
-function ensureChatbotWelcome() {
+function ensureChatbotWelcome(config = {}) {
   if (state.chatbot.messages.length > 0) return;
-  pushBot("Olá, sou o Assistente Operacional. O que você deseja fazer agora?", [
+  pushBot(config.chatbotWelcome || "Olá, sou o Assistente Operacional. O que você deseja fazer agora?", [
     action("Iniciar fiscalização", "start-inspection"),
     action("Ver minhas rotas", "show-routes"),
     action("Registrar ocorrência", "start-occurrence"),
@@ -891,6 +909,13 @@ document.addEventListener("click", async (event) => {
       return;
     }
 
+    if (actionName === "send-operational-summary") {
+      const result = await api("/api/notifications/operational-summary", { method: "POST", body: {} });
+      flash(`Resumo operacional registrado para ${result.notification.to.length} e-mail(s). Status: ${result.notification.status}.`);
+      renderView();
+      return;
+    }
+
     if (actionName === "chat-action") {
       await handleChatAction(target.dataset.chatAction, target.dataset.value);
     }
@@ -982,6 +1007,21 @@ document.addEventListener("submit", async (event) => {
       return;
     }
 
+    if (form.id === "settings-form") {
+      const result = await api("/api/settings", {
+        method: "PATCH",
+        body: {
+          chatbotWelcome: formData.get("chatbotWelcome"),
+          notificationEmails: splitFormList(formData.get("notificationEmails"))
+        }
+      });
+      state.settings = result.settings;
+      state.chatbot.messages = [];
+      flash("Configurações operacionais atualizadas.");
+      renderView();
+      return;
+    }
+
     if (form.id === "chat-input-form") {
       const input = form.querySelector("input[name='message']");
       await handleChatInput(input.value);
@@ -1061,7 +1101,7 @@ function parseRoutePointsInput(value) {
 }
 
 function splitFormList(value) {
-  return String(value || "").split(/[;,]/).map((item) => item.trim()).filter(Boolean);
+  return String(value || "").split(/[;,\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
 async function downloadReport(type, format) {
@@ -1131,6 +1171,31 @@ function pageHeader(title, subtitle) {
 
 function metric(label, value, help) {
   return `<div class="metric"><span>${h(label)}</span><strong>${h(value)}</strong><small>${h(help)}</small></div>`;
+}
+
+function dashboardSummary(summary) {
+  if (!summary) return "";
+  return `
+    <section class="panel" style="margin-bottom:16px">
+      <div class="row space-between">
+        <div>
+          <h2>Resumo operacional</h2>
+          <p class="subtle">${h(summary.headline)}</p>
+        </div>
+        ${summary.attention?.length ? `<span class="badge danger">${h(summary.attention.length)} alerta(s)</span>` : `<span class="badge success">Operação estável</span>`}
+      </div>
+      <div class="grid three" style="margin-top:12px">
+        ${(summary.cards || []).map((item) => `
+          <article class="item">
+            <h3>${h(item.label)}</h3>
+            <strong>${h(item.value)}</strong>
+            <p class="subtle">${h(item.detail)}</p>
+          </article>
+        `).join("")}
+      </div>
+      ${summary.attention?.length ? `<div class="list" style="margin-top:12px">${summary.attention.map((item) => `<div class="item">${h(item)}</div>`).join("")}</div>` : ""}
+    </section>
+  `;
 }
 
 function chartPanel(title, items) {
@@ -1304,6 +1369,20 @@ function movementItem(movement) {
 
 function auditItem(log) {
   return `<article class="item"><h3>${h(log.action)}</h3><p>${h(log.details)}</p><p class="subtle">${h(log.actorName)} · ${h(log.entity)} · ${h(new Date(log.createdAt).toLocaleString("pt-BR"))}</p></article>`;
+}
+
+function emailItem(email) {
+  return `
+    <article class="item">
+      <div class="row space-between">
+        <h3>${h(email.subject)}</h3>
+        ${statusBadge(email.status)}
+      </div>
+      <p>${h(email.category)} · ${h((email.to || []).join(", "))}</p>
+      ${email.error ? `<p class="error-banner">${h(email.error)}</p>` : ""}
+      <p class="subtle">${h(new Date(email.createdAt).toLocaleString("pt-BR"))}</p>
+    </article>
+  `;
 }
 
 function policy(title, body) {
