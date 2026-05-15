@@ -7,10 +7,22 @@ const state = {
   flash: null,
   settings: null,
   filters: {
-    employees: "",
+    employees: {
+      search: "",
+      cpf: "",
+      position: "",
+      unit: "",
+      workPost: "",
+      company: "",
+      contract: "",
+      serviceType: "",
+      status: ""
+    },
     occurrences: "",
     services: ""
   },
+  selectedEmployeeId: "",
+  editingEmployeeId: "",
   chatbot: {
     messages: [],
     flow: null,
@@ -212,26 +224,40 @@ async function renderDashboard(content) {
 }
 
 async function renderEmployees(content) {
-  const query = state.filters.employees ? `?search=${encodeURIComponent(state.filters.employees)}` : "";
+  const query = employeeQuery();
   const { employees, summary } = await api(`/api/employees${query}`);
+  const selected = employees.find((employee) => employee.id === state.selectedEmployeeId) || employees[0] || null;
+  state.selectedEmployeeId = selected?.id || "";
   content.innerHTML = `
-    ${pageHeader("Funcionários", "Controle de ativos, inativos, contratos, experiência e movimentações.")}
+    ${pageHeader("Funcionários", "Consulta, filtros, edição e exportação da base operacional.")}
     ${flashHtml()}
-    <section class="grid cards">
-      ${metric("Ativos", summary.totalActive, "Funcionários em operação")}
-      ${metric("Desligados", summary.totalInactive, "Histórico mantido")}
-      ${metric("Admissões recentes", summary.recentAdmissions, "Últimos 30 dias")}
-      ${metric("Em experiência", summary.experience, "Janela configurável")}
-      ${metric("Contrato a vencer", summary.contractEnding, "Próximos 30 dias")}
+    <section class="summary-strip">
+      ${metric("Ativos", summary.totalActive, "Em operação")}
+      ${metric("Inativos", summary.totalInactive, "Histórico")}
+      ${metric("Empresas", summary.byCompany?.length || 0, "Com funcionários ativos")}
+      ${metric("Contratos a vencer", summary.contractEnding, "Próximos 30 dias")}
     </section>
-    <section class="panel" style="margin-top:16px">
-      <form class="toolbar" id="employee-filter-form">
-        <input class="search" name="search" value="${h(state.filters.employees)}" placeholder="Filtrar por nome, CPF, matrícula, cargo, unidade, supervisor ou contrato">
-        <button class="btn" type="submit">Filtrar</button>
-        <button class="btn ghost" type="button" data-action="clear-employee-filter">Limpar</button>
-      </form>
+    <section class="panel quiet">
+      <div class="row space-between">
+        <h2>Funcionários</h2>
+        <div class="row">
+          <button class="btn small" data-action="download-report" data-type="employees" data-format="csv">CSV</button>
+          <button class="btn small" data-action="download-report" data-type="employees" data-format="xlsx">XLSX</button>
+          <button class="btn small" data-action="download-report" data-type="employees" data-format="pdf">PDF</button>
+        </div>
+      </div>
+      ${employeeFilters()}
       ${state.user.role === "ADMIN_OPERACIONAL" ? importBox() : ""}
-      ${employeeTable(employees)}
+      <div class="employee-layout">
+        ${employeeTable(employees)}
+        ${employeeDetail(selected)}
+      </div>
+    </section>
+    <section class="grid two" style="margin-top:16px">
+      ${compactList("Empresas", summary.byCompany)}
+      ${compactList("Centros de custo", summary.byUnit)}
+      ${compactList("Cargos", summary.byPosition)}
+      ${compactList("Filiais/Postos", summary.byWorkPost)}
     </section>
   `;
 }
@@ -871,7 +897,39 @@ document.addEventListener("click", async (event) => {
     }
 
     if (actionName === "clear-employee-filter") {
-      state.filters.employees = "";
+      state.filters.employees = {
+        search: "",
+        cpf: "",
+        position: "",
+        unit: "",
+        workPost: "",
+        company: "",
+        contract: "",
+        serviceType: "",
+        status: ""
+      };
+      state.selectedEmployeeId = "";
+      state.editingEmployeeId = "";
+      renderView();
+      return;
+    }
+
+    if (actionName === "employee-select") {
+      state.selectedEmployeeId = target.dataset.id;
+      state.editingEmployeeId = "";
+      renderView();
+      return;
+    }
+
+    if (actionName === "employee-edit") {
+      state.selectedEmployeeId = target.dataset.id;
+      state.editingEmployeeId = target.dataset.id;
+      renderView();
+      return;
+    }
+
+    if (actionName === "employee-cancel-edit") {
+      state.editingEmployeeId = "";
       renderView();
       return;
     }
@@ -949,7 +1007,29 @@ document.addEventListener("submit", async (event) => {
     }
 
     if (form.id === "employee-filter-form") {
-      state.filters.employees = formData.get("search");
+      state.filters.employees = {
+        search: formData.get("search") || "",
+        cpf: formData.get("cpf") || "",
+        position: formData.get("position") || "",
+        unit: formData.get("unit") || "",
+        workPost: formData.get("workPost") || "",
+        company: formData.get("company") || "",
+        contract: formData.get("contract") || "",
+        serviceType: formData.get("serviceType") || "",
+        status: formData.get("status") || ""
+      };
+      state.selectedEmployeeId = "";
+      state.editingEmployeeId = "";
+      renderView();
+      return;
+    }
+
+    if (form.id === "employee-edit-form") {
+      const body = Object.fromEntries(formData.entries());
+      const { employee } = await api(`/api/employees/${form.dataset.id}`, { method: "PATCH", body });
+      state.selectedEmployeeId = employee.id;
+      state.editingEmployeeId = "";
+      flash("Funcionário atualizado.");
       renderView();
       return;
     }
@@ -1105,7 +1185,8 @@ function splitFormList(value) {
 }
 
 async function downloadReport(type, format) {
-  const response = await fetch(`/api/reports/${type}?format=${format}`, {
+  const extra = type === "employees" ? employeeQuery().replace("?", "&") : "";
+  const response = await fetch(`/api/reports/${type}?format=${format}${extra}`, {
     headers: {
       Authorization: `Bearer ${state.token}`
     }
@@ -1213,24 +1294,53 @@ function barChart(items) {
     </div>`).join("")}</div>`;
 }
 
+function employeeQuery() {
+  const params = new URLSearchParams();
+  Object.entries(state.filters.employees).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
+function employeeFilters() {
+  const filters = state.filters.employees;
+  return `
+    <form class="employee-filters" id="employee-filter-form">
+      <input name="search" value="${h(filters.search)}" placeholder="Buscar geral">
+      <input name="cpf" value="${h(filters.cpf)}" placeholder="CPF">
+      <input name="position" value="${h(filters.position)}" placeholder="Cargo">
+      <input name="serviceType" value="${h(filters.serviceType)}" placeholder="Serviço">
+      <input name="unit" value="${h(filters.unit)}" placeholder="Centro de custo">
+      <input name="workPost" value="${h(filters.workPost)}" placeholder="Filial/Posto">
+      <input name="company" value="${h(filters.company)}" placeholder="Empresa">
+      <input name="contract" value="${h(filters.contract)}" placeholder="Contrato">
+      <select name="status">
+        <option value="">Status</option>
+        <option value="Ativo" ${filters.status === "Ativo" ? "selected" : ""}>Ativo</option>
+        <option value="Inativo" ${filters.status === "Inativo" ? "selected" : ""}>Inativo</option>
+      </select>
+      <button class="btn primary" type="submit">Filtrar</button>
+      <button class="btn ghost" type="button" data-action="clear-employee-filter">Limpar</button>
+    </form>
+  `;
+}
+
 function employeeTable(employees) {
   if (!employees.length) return empty("Nenhum funcionário encontrado.");
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Matrícula</th><th>Nome</th><th>CPF</th><th>Cargo</th><th>Serviço</th><th>Unidade</th><th>Posto</th><th>Status</th><th>Supervisor</th><th>Contrato</th></tr></thead>
+        <thead><tr><th>Funcionário</th><th>CPF</th><th>Cargo</th><th>Centro de custo</th><th>Empresa</th><th>Status</th><th></th></tr></thead>
         <tbody>
           ${employees.map((employee) => `<tr>
-            <td>${h(employee.enrollment)}</td>
-            <td><strong>${h(employee.fullName)}</strong><br><span class="subtle">${h(employee.email)}</span></td>
+            <td><strong>${h(employee.fullName)}</strong><br><span class="subtle">${h(employee.enrollment)} · ${h(employee.email || employee.phone || "")}</span></td>
             <td>${h(formatCpf(employee.cpf))}</td>
             <td>${h(employee.position)}</td>
-            <td>${h(employee.serviceType)}</td>
             <td>${h(employee.unit)}</td>
-            <td>${h(employee.workPost)}</td>
+            <td>${h(employee.company || employee.contract || "Não informado")}</td>
             <td>${badge(employee.status)}</td>
-            <td>${h(employee.supervisorName)}</td>
-            <td>${h(employee.contract)}<br><span class="subtle">${h(employee.contractEndDate || "Sem data")}</span></td>
+            <td><button class="btn small ${state.selectedEmployeeId === employee.id ? "primary" : ""}" data-action="employee-select" data-id="${h(employee.id)}">Ver</button></td>
           </tr>`).join("")}
         </tbody>
       </table>
@@ -1238,9 +1348,91 @@ function employeeTable(employees) {
   `;
 }
 
+function employeeDetail(employee) {
+  if (!employee) return `<aside class="employee-detail">${empty("Selecione um funcionário para ver os dados.")}</aside>`;
+  if (state.editingEmployeeId === employee.id && state.user.role === "ADMIN_OPERACIONAL") {
+    return employeeEditForm(employee);
+  }
+  return `
+    <aside class="employee-detail">
+      <div class="row space-between">
+        <div>
+          <h2>${h(employee.fullName)}</h2>
+          <p class="subtle">${h(employee.enrollment)} · ${h(formatCpf(employee.cpf))}</p>
+        </div>
+        ${state.user.role === "ADMIN_OPERACIONAL" ? `<button class="btn small" data-action="employee-edit" data-id="${h(employee.id)}">Editar</button>` : ""}
+      </div>
+      <div class="detail-grid">
+        ${detail("Cargo", employee.position)}
+        ${detail("Serviço", employee.serviceType)}
+        ${detail("Centro de custo", employee.unit)}
+        ${detail("Filial/Posto", employee.workPost)}
+        ${detail("Empresa", employee.company)}
+        ${detail("Contrato", employee.contract)}
+        ${detail("Admissão", employee.admissionDate)}
+        ${detail("Status", employee.status)}
+        ${detail("Supervisor", employee.supervisorName)}
+        ${detail("Telefone", employee.phone)}
+        ${detail("E-mail", employee.email)}
+        ${detail("Contrato até", employee.contractEndDate)}
+      </div>
+      ${employee.notes ? `<p class="subtle">${h(employee.notes)}</p>` : ""}
+    </aside>
+  `;
+}
+
+function employeeEditForm(employee) {
+  return `
+    <aside class="employee-detail">
+      <div class="row space-between">
+        <h2>Editar funcionário</h2>
+        <button class="btn small ghost" type="button" data-action="employee-cancel-edit">Cancelar</button>
+      </div>
+      <form id="employee-edit-form" data-id="${h(employee.id)}">
+        <div class="grid two">
+          ${editField("fullName", "Nome", employee.fullName)}
+          ${editField("enrollment", "Matrícula", employee.enrollment)}
+          ${editField("cpf", "CPF", formatCpf(employee.cpf))}
+          ${editField("position", "Cargo", employee.position)}
+          ${editField("serviceType", "Serviço", employee.serviceType)}
+          ${editField("unit", "Centro de custo", employee.unit)}
+          ${editField("workPost", "Filial/Posto", employee.workPost)}
+          ${editField("company", "Empresa", employee.company)}
+          ${editField("contract", "Contrato", employee.contract)}
+          ${editField("supervisorName", "Supervisor", employee.supervisorName)}
+          ${editField("phone", "Telefone", employee.phone)}
+          ${editField("email", "E-mail", employee.email, "email")}
+          ${editField("admissionDate", "Admissão", employee.admissionDate, "date")}
+          ${editField("contractEndDate", "Contrato até", employee.contractEndDate, "date")}
+          ${selectField("status", "Status", ["Ativo", "Inativo"], employee.status)}
+        </div>
+        <div class="field"><label>Observações</label><textarea name="notes" rows="3">${h(employee.notes || "")}</textarea></div>
+        <button class="btn primary" type="submit">Salvar funcionário</button>
+      </form>
+    </aside>
+  `;
+}
+
+function editField(name, label, value = "", type = "text") {
+  return `<div class="field"><label>${h(label)}</label><input name="${h(name)}" type="${h(type)}" value="${h(value || "")}"></div>`;
+}
+
+function detail(label, value) {
+  return `<div class="detail-item"><span>${h(label)}</span><strong>${h(value || "Não informado")}</strong></div>`;
+}
+
+function compactList(title, items = []) {
+  return `
+    <section class="panel quiet">
+      <h2>${h(title)}</h2>
+      <div class="compact-list">${(items || []).slice(0, 8).map((item) => `<div><span>${h(item.label)}</span><strong>${h(item.value)}</strong></div>`).join("") || empty("Sem dados.")}</div>
+    </section>
+  `;
+}
+
 function importBox() {
   return `
-    <form id="employee-import-form" class="panel" style="margin-bottom:16px">
+    <form id="employee-import-form" class="import-inline">
       <h2>Importar planilha</h2>
       <p class="subtle">Aceita CSV, TSV, Google Sheets exportado e XLSX simples, incluindo a planilha funcionários_basico. Deduplica por CPF ou matrícula e cria histórico automaticamente.</p>
       <div class="row">

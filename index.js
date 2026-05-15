@@ -237,6 +237,22 @@ async function routeApi(request, response, url) {
     return;
   }
 
+  if (request.method === "GET" && matchPath(url.pathname, "/api/employees/:id")) {
+    const employee = scopeEmployees(data.employees, user).find((candidate) => candidate.id === pathId(url.pathname, 3));
+    if (!employee) {
+      sendJson(response, 404, { error: "Funcionario nao encontrado", message: "O funcionario solicitado nao existe ou nao esta no seu escopo." });
+      return;
+    }
+    sendJson(response, 200, { employee });
+    return;
+  }
+
+  if (request.method === "PATCH" && matchPath(url.pathname, "/api/employees/:id")) {
+    requireRole(user, ["ADMIN_OPERACIONAL"], response);
+    await updateEmployee(request, response, data, user, pathId(url.pathname, 3));
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/employees/import") {
     requireRole(user, ["ADMIN_OPERACIONAL"], response);
     await importEmployees(request, response, data, user);
@@ -600,6 +616,70 @@ async function importEmployees(request, response, data, user) {
     noticesCreated: notices.length,
     summary: summarizeEmployees(data.employees, data.settings)
   });
+}
+
+async function updateEmployee(request, response, data, user, employeeId) {
+  const body = await readJson(request);
+  const employee = data.employees.find((candidate) => candidate.id === employeeId && candidate.deletedAt == null);
+  if (!employee) {
+    sendJson(response, 404, { error: "Funcionario nao encontrado", message: "O funcionario solicitado nao existe." });
+    return;
+  }
+
+  const before = { ...employee };
+  const allowed = [
+    "enrollment",
+    "fullName",
+    "cpf",
+    "position",
+    "serviceType",
+    "unit",
+    "workPost",
+    "shiftScale",
+    "workHours",
+    "admissionDate",
+    "terminationDate",
+    "status",
+    "supervisorName",
+    "company",
+    "contract",
+    "contractEndDate",
+    "phone",
+    "email",
+    "notes"
+  ];
+
+  allowed.forEach((key) => {
+    if (body[key] != null) {
+      employee[key] = key === "cpf" ? normalizeCpf(body[key])
+        : key.endsWith("Date") ? normalizeDate(body[key])
+          : key === "email" ? clean(body[key]).toLowerCase()
+            : clean(body[key]);
+    }
+  });
+
+  const validation = validateEmployee(employee);
+  if (validation.length > 0) {
+    Object.assign(employee, before);
+    sendValidation(response, validation);
+    return;
+  }
+
+  employee.updatedAt = new Date().toISOString();
+  createMovementFromDiff(data, before, employee, user);
+  audit(data, user, "employees.update", "Employee", employee.id, `Funcionario atualizado: ${employee.fullName}.`);
+  await notifyOperationalRecord(data, user, "Funcionario", `Funcionario atualizado: ${employee.fullName}`, [
+    `Funcionario: ${employee.fullName}`,
+    `CPF: ${employee.cpf}`,
+    `Cargo: ${employee.position}`,
+    `Centro de custo: ${employee.unit}`,
+    `Filial/Posto: ${employee.workPost}`,
+    `Empresa: ${employee.company}`,
+    `Contrato: ${employee.contract}`,
+    `Status: ${employee.status}`
+  ]);
+  await writeData(data);
+  sendJson(response, 200, { employee });
 }
 
 async function createRoute(request, response, data, user) {
@@ -1271,7 +1351,11 @@ function summarizeEmployees(employees, settings = {}) {
     contractEnding: active.filter((employee) => futureWithinDays(employee.contractEndDate, settings.contractWarningDays ?? 30)).length,
     byService: groupCount(active, "serviceType"),
     byUnit: groupCount(active, "unit"),
-    bySupervisor: groupCount(active, "supervisorName")
+    bySupervisor: groupCount(active, "supervisorName"),
+    byCompany: groupCount(active, "company"),
+    byContract: groupCount(active, "contract"),
+    byPosition: groupCount(active, "position"),
+    byWorkPost: groupCount(active, "workPost")
   };
 }
 
@@ -1491,17 +1575,41 @@ function applyListFilters(records, searchParams) {
   let result = [...records];
   const search = clean(searchParams.get("search")).toLowerCase();
   if (search) {
-    result = result.filter((record) => Object.values(record).some((value) => String(value ?? "").toLowerCase().includes(search)));
+    const normalizedSearch = normalizedKey(search);
+    const cpfSearch = normalizeCpf(search);
+    result = result.filter((record) => Object.values(record).some((value) => normalizedKey(value).includes(normalizedSearch)) ||
+      (cpfSearch && normalizeCpf(record.cpf).includes(cpfSearch)));
   }
 
   for (const [key, value] of searchParams.entries()) {
-    if (["search", "format"].includes(key) || !value) {
+    if (["search", "format", "path"].includes(key) || !value) {
       continue;
     }
-    result = result.filter((record) => String(record[key] ?? "").toLowerCase() === String(value).toLowerCase());
+    const fields = filterFieldsFor(key);
+    const expected = normalizedKey(value);
+    const expectedCpf = normalizeCpf(value);
+    result = result.filter((record) => fields.some((field) => {
+      if (field === "cpf") {
+        return expectedCpf ? normalizeCpf(record[field]).includes(expectedCpf) : normalizedKey(record[field]).includes(expected);
+      }
+      return normalizedKey(record[field]).includes(expected);
+    }));
   }
 
   return result;
+}
+
+function filterFieldsFor(key) {
+  const aliases = {
+    centroDeCusto: ["unit", "contract"],
+    costCenter: ["unit", "contract"],
+    filial: ["workPost", "unit"],
+    cargo: ["position"],
+    empresa: ["company"],
+    contrato: ["contract"],
+    posto: ["workPost"]
+  };
+  return aliases[key] || [key];
 }
 
 function required(body, fields) {
