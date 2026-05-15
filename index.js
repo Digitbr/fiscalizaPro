@@ -1360,15 +1360,16 @@ function summarizeEmployees(employees, settings = {}) {
 }
 
 function normalizeEmployeeRow(row) {
-  const status = normalizeStatus(row.status, row.terminationDate);
-  const unit = clean(row.unit ?? row.centroDeCusto ?? row.costCenter ?? row.filial) || "Unidade nao informada";
-  const workPost = clean(row.workPost ?? row.posto ?? row.filial);
-  const serviceType = clean(row.serviceType ?? row.tipoDeServico ?? row.service ?? inferServiceType(row.position));
+  const position = clean(row.position ?? row.cargo ?? row.funcao);
+  const status = normalizeStatus(row.status || row.statusTratamento, row.terminationDate);
+  const unit = clean(row.unit ?? row.centroDeCusto ?? row.costCenter ?? row.departamento ?? row.lotacao ?? row.filial) || "Unidade nao informada";
+  const workPost = clean(row.workPost ?? row.posto ?? row.filial ?? row.base ?? row.setor);
+  const serviceType = clean(row.serviceType ?? row.tipoDeServico ?? row.service ?? inferServiceType(position));
   return {
     enrollment: clean(row.enrollment) || `CPF-${normalizeCpf(row.cpf) || row._rowNumber}`,
     fullName: clean(row.fullName) || `Funcionario ${clean(row.enrollment) || normalizeCpf(row.cpf) || row._rowNumber}`,
     cpf: normalizeCpf(row.cpf),
-    position: clean(row.position) || "Nao informado",
+    position: position || "Nao informado",
     serviceType,
     unit,
     workPost,
@@ -1379,7 +1380,7 @@ function normalizeEmployeeRow(row) {
     status,
     supervisorId: "",
     supervisorName: clean(row.supervisorName),
-    company: clean(row.company ?? row.empresa),
+    company: clean(row.company ?? row.empresa ?? row.empregador ?? row.cliente),
     contract: clean(row.contract ?? row.contrato ?? row.centroDeCusto),
     contractEndDate: normalizeDate(row.contractEndDate),
     phone: clean(row.phone),

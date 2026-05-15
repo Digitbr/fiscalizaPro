@@ -1135,7 +1135,7 @@ async function importEmployees(form) {
   if (file.name.toLowerCase().endsWith(".xlsx")) {
     content = await toBase64(await file.arrayBuffer());
   } else {
-    content = await file.text();
+    content = await textFromFile(file);
   }
 
   const result = await api("/api/employees/import", {
@@ -1147,6 +1147,9 @@ async function importEmployees(form) {
   });
 
   flash(`Importação concluída: ${result.batch.inserted} inseridos, ${result.batch.updated} atualizados, ${result.batch.errors} erros.`);
+  if (result.batch.errors > 0) {
+    flash(`Importação concluída com ${result.batch.errors} erro(s). ${result.batch.inserted} inseridos e ${result.batch.updated} atualizados.`, "error");
+  }
 }
 
 function routePayloadFromForm(formData) {
@@ -1433,12 +1436,13 @@ function compactList(title, items = []) {
 function importBox() {
   return `
     <form id="employee-import-form" class="import-inline">
-      <h2>Importar planilha</h2>
-      <p class="subtle">Aceita CSV, TSV, Google Sheets exportado e XLSX simples, incluindo a planilha funcionários_basico. Deduplica por CPF ou matrícula e cria histórico automaticamente.</p>
+      <h2>Importar planilha de funcionários</h2>
+      <p class="subtle">Aceita XLSX, CSV ou TSV. Reconhece matrícula, nome, CPF, cargo, centro de custo, filial/posto, empresa, contrato, admissão, desligamento, telefone, e-mail e status.</p>
       <div class="row">
         <input type="file" name="file" accept=".csv,.tsv,.txt,.xlsx" required>
         <button class="btn primary" type="submit">Importar e validar</button>
       </div>
+      <p class="subtle">Se CPF ou matrícula já existir, o registro é atualizado. Se não existir, o funcionário é criado.</p>
     </form>
   `;
 }
@@ -1757,4 +1761,13 @@ async function toBase64(arrayBuffer) {
     binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
   }
   return btoa(binary);
+}
+
+async function textFromFile(file) {
+  const buffer = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
 }
