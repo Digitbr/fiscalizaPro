@@ -221,7 +221,7 @@ async function routeApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/dashboard") {
-    sendJson(response, 200, buildDashboard(data, user));
+    sendJson(response, 200, buildDashboard(data, user, url.searchParams));
     return;
   }
 
@@ -232,8 +232,13 @@ async function routeApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/employees") {
-    const employees = applyListFilters(scopeEmployees(data.employees, user), url.searchParams);
-    sendJson(response, 200, { employees, summary: summarizeEmployees(scopeEmployees(data.employees, user), data.settings) });
+    const scopedEmployees = scopeEmployees(data.employees, user);
+    const employees = applyListFilters(scopedEmployees, url.searchParams);
+    sendJson(response, 200, {
+      employees,
+      summary: summarizeEmployees(employees, data.settings),
+      filterOptions: buildEmployeeFilterOptions(scopedEmployees)
+    });
     return;
   }
 
@@ -1239,13 +1244,17 @@ async function sendOperationalSummary(response, data, user) {
   sendJson(response, 201, { notification });
 }
 
-function buildDashboard(data, user) {
+function buildDashboard(data, user, searchParams = new URLSearchParams()) {
   ensureOperationalConfig(data);
-  const employees = scopeEmployees(data.employees, user);
-  const routes = scopeRoutes(data.routes, user);
-  const occurrences = scopeOccurrences(data.occurrences, user);
-  const serviceTasks = scopeServiceTasks(data.serviceTasks, user);
-  const movements = scopeMovements(data.employeeMovements, data.employees, user);
+  const scopedEmployees = scopeEmployees(data.employees, user);
+  const employees = applyListFilters(scopedEmployees, searchParams);
+  const employeeIds = new Set(employees.map((employee) => employee.id));
+  const filteredUnits = new Set(employees.map((employee) => clean(employee.unit)).filter(Boolean));
+  const hasEmployeeFilters = hasOperationalFilters(searchParams);
+  const routes = scopeRoutes(data.routes, user).filter((route) => !hasEmployeeFilters || filteredUnits.size === 0 || filteredUnits.has(clean(route.unit)));
+  const occurrences = scopeOccurrences(data.occurrences, user).filter((occurrence) => !hasEmployeeFilters || filteredUnits.size === 0 || filteredUnits.has(clean(occurrence.unit)));
+  const serviceTasks = scopeServiceTasks(data.serviceTasks, user).filter((task) => !hasEmployeeFilters || filteredUnits.size === 0 || filteredUnits.has(clean(task.unit)) || employeeIds.has(task.employeeId));
+  const movements = scopeMovements(data.employeeMovements, data.employees, user).filter((movement) => !hasEmployeeFilters || employeeIds.has(movement.employeeId));
   const now = new Date();
   const month = now.toISOString().slice(0, 7);
   const admissionMovements = movements.filter((movement) => normalizedKey(movement.type) === "admissao");
@@ -1270,6 +1279,8 @@ function buildDashboard(data, user) {
   return {
     metrics,
     summary: buildDashboardSummary(metrics, data, { employees, routes, occurrences, serviceTasks, movements }),
+    filters: Object.fromEntries([...searchParams.entries()].filter(([key]) => !["format", "path"].includes(key))),
+    filterOptions: buildEmployeeFilterOptions(scopedEmployees),
     charts: {
       employeesByService: groupCount(employees.filter((employee) => employee.status === "Ativo"), "serviceType"),
       employeesByUnit: groupCount(employees.filter((employee) => employee.status === "Ativo"), "unit"),
@@ -1357,6 +1368,29 @@ function summarizeEmployees(employees, settings = {}) {
     byPosition: groupCount(active, "position"),
     byWorkPost: groupCount(active, "workPost")
   };
+}
+
+function buildEmployeeFilterOptions(employees) {
+  return {
+    enrollment: uniqueOptions(employees, "enrollment"),
+    unit: uniqueOptions(employees, "unit"),
+    position: uniqueOptions(employees, "position"),
+    company: uniqueOptions(employees, "company"),
+    workPost: uniqueOptions(employees, "workPost"),
+    contract: uniqueOptions(employees, "contract"),
+    serviceType: uniqueOptions(employees, "serviceType"),
+    status: uniqueOptions(employees, "status")
+  };
+}
+
+function uniqueOptions(records, key) {
+  return [...new Set(records.map((record) => clean(record[key])).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .slice(0, 200);
+}
+
+function hasOperationalFilters(searchParams) {
+  return [...searchParams.entries()].some(([key, value]) => value && !["format", "path"].includes(key));
 }
 
 function normalizeEmployeeRow(row) {

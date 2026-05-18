@@ -7,7 +7,14 @@ const state = {
   flash: null,
   settings: null,
   filters: {
+    dashboard: {
+      enrollment: "",
+      unit: "",
+      position: "",
+      company: ""
+    },
     employees: {
+      enrollment: "",
       search: "",
       cpf: "",
       position: "",
@@ -192,11 +199,13 @@ async function renderView() {
 }
 
 async function renderDashboard(content) {
-  const dashboard = await api("/api/dashboard");
+  const dashboard = await api(`/api/dashboard${dashboardQuery()}`);
   const metrics = dashboard.metrics;
   content.innerHTML = `
-    ${pageHeader("Dashboard gerencial", "Indicadores consolidados com escopo aplicado ao perfil logado.")}
+    ${pageHeader("Painel de segurança patrimonial", "Indicadores operacionais por matrícula, centro de custo, cargo e empresa.")}
     ${flashHtml()}
+    ${securityDashboardIntro(dashboard)}
+    ${dashboardFilters(dashboard.filterOptions || {})}
     ${dashboardSummary(dashboard.summary)}
     <section class="grid cards">
       ${metric("Funcionários ativos", metrics.activeEmployees, "Base operacional liberada")}
@@ -225,7 +234,7 @@ async function renderDashboard(content) {
 
 async function renderEmployees(content) {
   const query = employeeQuery();
-  const { employees, summary } = await api(`/api/employees${query}`);
+  const { employees, summary, filterOptions } = await api(`/api/employees${query}`);
   const selected = employees.find((employee) => employee.id === state.selectedEmployeeId) || employees[0] || null;
   state.selectedEmployeeId = selected?.id || "";
   content.innerHTML = `
@@ -246,7 +255,7 @@ async function renderEmployees(content) {
           <button class="btn small" data-action="download-report" data-type="employees" data-format="pdf">PDF</button>
         </div>
       </div>
-      ${employeeFilters()}
+      ${employeeFilters(filterOptions || {})}
       ${state.user.role === "ADMIN_OPERACIONAL" ? importBox() : ""}
       <div class="employee-layout">
         ${employeeTable(employees)}
@@ -898,6 +907,7 @@ document.addEventListener("click", async (event) => {
 
     if (actionName === "clear-employee-filter") {
       state.filters.employees = {
+        enrollment: "",
         search: "",
         cpf: "",
         position: "",
@@ -910,6 +920,17 @@ document.addEventListener("click", async (event) => {
       };
       state.selectedEmployeeId = "";
       state.editingEmployeeId = "";
+      renderView();
+      return;
+    }
+
+    if (actionName === "clear-dashboard-filter") {
+      state.filters.dashboard = {
+        enrollment: "",
+        unit: "",
+        position: "",
+        company: ""
+      };
       renderView();
       return;
     }
@@ -1008,6 +1029,7 @@ document.addEventListener("submit", async (event) => {
 
     if (form.id === "employee-filter-form") {
       state.filters.employees = {
+        enrollment: formData.get("enrollment") || "",
         search: formData.get("search") || "",
         cpf: formData.get("cpf") || "",
         position: formData.get("position") || "",
@@ -1020,6 +1042,17 @@ document.addEventListener("submit", async (event) => {
       };
       state.selectedEmployeeId = "";
       state.editingEmployeeId = "";
+      renderView();
+      return;
+    }
+
+    if (form.id === "dashboard-filter-form") {
+      state.filters.dashboard = {
+        enrollment: formData.get("enrollment") || "",
+        unit: formData.get("unit") || "",
+        position: formData.get("position") || "",
+        company: formData.get("company") || ""
+      };
       renderView();
       return;
     }
@@ -1257,6 +1290,24 @@ function metric(label, value, help) {
   return `<div class="metric"><span>${h(label)}</span><strong>${h(value)}</strong><small>${h(help)}</small></div>`;
 }
 
+function securityDashboardIntro(dashboard) {
+  const activeFilters = Object.values(state.filters.dashboard).filter(Boolean).length;
+  return `
+    <section class="security-intro">
+      <div>
+        <span class="eyebrow">Segurança patrimonial</span>
+        <h2>Visão operacional por posto, empresa e equipe</h2>
+        <p>Monitore cobertura, movimentações, rotas e ocorrências com recorte direto da base de funcionários.</p>
+      </div>
+      <div class="security-kpis">
+        <div><span>Filtros ativos</span><strong>${h(activeFilters)}</strong></div>
+        <div><span>Base visível</span><strong>${h(dashboard.metrics.activeEmployees + dashboard.metrics.inactiveEmployees)}</strong></div>
+        <div><span>Alertas</span><strong>${h(dashboard.summary?.attention?.length || 0)}</strong></div>
+      </div>
+    </section>
+  `;
+}
+
 function dashboardSummary(summary) {
   if (!summary) return "";
   return `
@@ -1286,6 +1337,30 @@ function chartPanel(title, items) {
   return `<div class="panel"><h2>${h(title)}</h2>${barChart(items)}</div>`;
 }
 
+function dashboardQuery() {
+  return queryFromFilters(state.filters.dashboard);
+}
+
+function dashboardFilters(options = {}) {
+  const filters = state.filters.dashboard;
+  return `
+    <section class="operations-filter">
+      <div>
+        <h2>Filtro operacional</h2>
+        <p class="subtle">Refine o painel por dados da relação de funcionários.</p>
+      </div>
+      <form class="filter-grid compact" id="dashboard-filter-form">
+        ${selectWithOptions("enrollment", "Matrícula", options.enrollment, filters.enrollment)}
+        ${selectWithOptions("unit", "Centro de custo", options.unit, filters.unit)}
+        ${selectWithOptions("position", "Cargo", options.position, filters.position)}
+        ${selectWithOptions("company", "Empresa", options.company, filters.company)}
+        <button class="btn primary" type="submit">Aplicar</button>
+        <button class="btn ghost" type="button" data-action="clear-dashboard-filter">Limpar</button>
+      </form>
+    </section>
+  `;
+}
+
 function barChart(items) {
   if (!items?.length) return empty("Sem dados para o período.");
   const max = Math.max(...items.map((item) => item.value), 1);
@@ -1298,25 +1373,30 @@ function barChart(items) {
 }
 
 function employeeQuery() {
+  return queryFromFilters(state.filters.employees);
+}
+
+function queryFromFilters(filters) {
   const params = new URLSearchParams();
-  Object.entries(state.filters.employees).forEach(([key, value]) => {
+  Object.entries(filters).forEach(([key, value]) => {
     if (value) params.set(key, value);
   });
   const text = params.toString();
   return text ? `?${text}` : "";
 }
 
-function employeeFilters() {
+function employeeFilters(options = {}) {
   const filters = state.filters.employees;
   return `
-    <form class="employee-filters" id="employee-filter-form">
+    <form class="employee-filters filter-grid" id="employee-filter-form">
+      ${selectWithOptions("enrollment", "Matrícula", options.enrollment, filters.enrollment)}
+      ${selectWithOptions("unit", "Centro de custo", options.unit, filters.unit)}
+      ${selectWithOptions("position", "Cargo", options.position, filters.position)}
+      ${selectWithOptions("company", "Empresa", options.company, filters.company)}
       <input name="search" value="${h(filters.search)}" placeholder="Buscar geral">
       <input name="cpf" value="${h(filters.cpf)}" placeholder="CPF">
-      <input name="position" value="${h(filters.position)}" placeholder="Cargo">
       <input name="serviceType" value="${h(filters.serviceType)}" placeholder="Serviço">
-      <input name="unit" value="${h(filters.unit)}" placeholder="Centro de custo">
       <input name="workPost" value="${h(filters.workPost)}" placeholder="Filial/Posto">
-      <input name="company" value="${h(filters.company)}" placeholder="Empresa">
       <input name="contract" value="${h(filters.contract)}" placeholder="Contrato">
       <select name="status">
         <option value="">Status</option>
@@ -1326,6 +1406,18 @@ function employeeFilters() {
       <button class="btn primary" type="submit">Filtrar</button>
       <button class="btn ghost" type="button" data-action="clear-employee-filter">Limpar</button>
     </form>
+  `;
+}
+
+function selectWithOptions(name, label, values = [], selected = "") {
+  return `
+    <label class="filter-field">
+      <span>${h(label)}</span>
+      <select name="${h(name)}">
+        <option value="">Todos</option>
+        ${(values || []).map((value) => `<option value="${h(value)}" ${String(value) === String(selected) ? "selected" : ""}>${h(value)}</option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
