@@ -90,6 +90,7 @@ const serviceTypes = [
 ];
 
 const priorities = ["Baixa", "Média", "Alta", "Crítica"];
+const companyOptions = ["Argosvig", "Flash", "Impacto", "Prime", "Aliança", "Pegasus"];
 
 init();
 
@@ -1492,7 +1493,7 @@ function employeeEditForm(employee) {
           ${editField("serviceType", "Serviço", employee.serviceType)}
           ${editField("unit", "Centro de custo", employee.unit)}
           ${editField("workPost", "Filial/Posto", employee.workPost)}
-          ${editField("company", "Empresa", employee.company)}
+          ${selectField("company", "Empresa", companyOptions, employee.company)}
           ${editField("contract", "Contrato", employee.contract)}
           ${editField("supervisorName", "Supervisor", employee.supervisorName)}
           ${editField("phone", "Telefone", employee.phone)}
@@ -1529,7 +1530,8 @@ function importBox() {
   return `
     <form id="employee-import-form" class="import-inline">
       <h2>Importar planilha de funcionários</h2>
-      <p class="subtle">Aceita XLSX, CSV ou TSV. Reconhece matrícula, nome, CPF, cargo, centro de custo, filial/posto, empresa, contrato, admissão, desligamento, telefone, e-mail e status.</p>
+      <p class="subtle">Aceita XLSX, CSV ou TSV. Reconhece matrícula, nome, CPF, cargo, centro de custo, filial/posto, contrato, admissão, desligamento, telefone, e-mail, status e empresa por inicial.</p>
+      <p class="subtle">Empresas válidas: Argosvig, Flash, Impacto, Prime, Aliança e Pegasus.</p>
       <div class="row">
         <input type="file" name="file" accept=".csv,.tsv,.txt,.xlsx" required>
         <button class="btn primary" type="submit">Importar e validar</button>

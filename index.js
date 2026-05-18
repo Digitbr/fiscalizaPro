@@ -32,6 +32,7 @@ const defaultNotificationEmails = [
   "supervisor.adm@argosvig.com.br"
 ];
 const defaultChatbotWelcome = "Olá, sou o Assistente Operacional. O que você deseja fazer agora?";
+const operationalCompanies = ["Argosvig", "Flash", "Impacto", "Prime", "Aliança", "Pegasus"];
 
 const reportDefinitions = {
   employees: {
@@ -656,7 +657,8 @@ async function updateEmployee(request, response, data, user, employeeId) {
 
   allowed.forEach((key) => {
     if (body[key] != null) {
-      employee[key] = key === "cpf" ? normalizeCpf(body[key])
+      employee[key] = key === "company" ? normalizeCompany(body[key], employee)
+        : key === "cpf" ? normalizeCpf(body[key])
         : key.endsWith("Date") ? normalizeDate(body[key])
           : key === "email" ? clean(body[key]).toLowerCase()
             : clean(body[key]);
@@ -1375,7 +1377,7 @@ function buildEmployeeFilterOptions(employees) {
     enrollment: uniqueOptions(employees, "enrollment"),
     unit: uniqueOptions(employees, "unit"),
     position: uniqueOptions(employees, "position"),
-    company: uniqueOptions(employees, "company"),
+    company: operationalCompanies,
     workPost: uniqueOptions(employees, "workPost"),
     contract: uniqueOptions(employees, "contract"),
     serviceType: uniqueOptions(employees, "serviceType"),
@@ -1399,9 +1401,10 @@ function normalizeEmployeeRow(row) {
   const unit = clean(row.unit ?? row.centroDeCusto ?? row.costCenter ?? row.departamento ?? row.lotacao ?? row.filial) || "Unidade nao informada";
   const workPost = clean(row.workPost ?? row.posto ?? row.filial ?? row.base ?? row.setor);
   const serviceType = clean(row.serviceType ?? row.tipoDeServico ?? row.service ?? inferServiceType(position));
+  const enrollment = clean(row.enrollment) || `CPF-${normalizeCpf(row.cpf) || row._rowNumber}`;
   return {
-    enrollment: clean(row.enrollment) || `CPF-${normalizeCpf(row.cpf) || row._rowNumber}`,
-    fullName: clean(row.fullName) || `Funcionario ${clean(row.enrollment) || normalizeCpf(row.cpf) || row._rowNumber}`,
+    enrollment,
+    fullName: clean(row.fullName) || `Funcionario ${enrollment || normalizeCpf(row.cpf) || row._rowNumber}`,
     cpf: normalizeCpf(row.cpf),
     position: position || "Nao informado",
     serviceType,
@@ -1414,7 +1417,7 @@ function normalizeEmployeeRow(row) {
     status,
     supervisorId: "",
     supervisorName: clean(row.supervisorName),
-    company: clean(row.company ?? row.empresa ?? row.empregador ?? row.cliente),
+    company: normalizeCompany(row.company ?? row.empresa ?? row.empregador, { enrollment, unit, workPost, contract: row.contract ?? row.contrato }),
     contract: clean(row.contract ?? row.contrato ?? row.centroDeCusto),
     contractEndDate: normalizeDate(row.contractEndDate),
     phone: clean(row.phone),
@@ -1432,6 +1435,50 @@ function inferServiceType(position) {
   if (value.includes("monitor") || value.includes("cftv")) return "CFTV / monitoramento";
   if (value.includes("manut")) return "Manutencao predial";
   return clean(position) || "Apoio operacional";
+}
+
+function normalizeCompany(value, context = {}) {
+  const candidates = [
+    clean(value),
+    clean(context.enrollment),
+    clean(context.unit),
+    clean(context.workPost),
+    clean(context.contract)
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const company = companyFromText(candidate);
+    if (company) return company;
+  }
+
+  return "";
+}
+
+function companyFromText(value) {
+  const normalized = normalizedKey(value);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
+
+  if (/^(ar|arg|av)\d*$/.test(compact)) return "Argosvig";
+  if (/^(fl)\d*$/.test(compact)) return "Flash";
+  if (/^(im|imp)\d*$/.test(compact)) return "Impacto";
+  if (/^(pr|pri)\d*$/.test(compact)) return "Prime";
+  if (/^(al|ali)\d*$/.test(compact)) return "Aliança";
+  if (/^(pg|peg)\d*$/.test(compact)) return "Pegasus";
+
+  if (["argosvig", "argos", "arg"].some((alias) => compact.includes(alias)) || tokens.some((token) => ["ar", "av"].includes(token))) return "Argosvig";
+  if (compact.includes("flash") || tokens.includes("fl")) return "Flash";
+  if (compact.includes("impacto") || tokens.some((token) => ["im", "imp"].includes(token))) return "Impacto";
+  if (compact.includes("prime") || tokens.some((token) => ["pr", "pri"].includes(token))) return "Prime";
+  if (compact.includes("alianca") || tokens.some((token) => ["al", "ali"].includes(token))) return "Aliança";
+  if (compact.includes("pegasus") || tokens.some((token) => ["pg", "peg"].includes(token))) return "Pegasus";
+
+  if (compact === "a") return "Argosvig";
+  if (compact === "f") return "Flash";
+  if (compact === "i") return "Impacto";
+  if (compact === "p") return "Prime";
+
+  return "";
 }
 
 function validateEmployee(employee) {
@@ -1621,14 +1668,14 @@ function applyListFilters(records, searchParams) {
       continue;
     }
     const fields = filterFieldsFor(key);
-    const expected = normalizedKey(value);
+    const expected = normalizedKey(key === "company" || key === "empresa" ? normalizeCompany(value) : value);
     const expectedCpf = normalizeCpf(value);
     const exact = isExactFilterKey(key);
     result = result.filter((record) => fields.some((field) => {
       if (field === "cpf") {
         return expectedCpf ? normalizeCpf(record[field]).includes(expectedCpf) : normalizedKey(record[field]).includes(expected);
       }
-      const actual = normalizedKey(record[field]);
+      const actual = normalizedKey(field === "company" ? normalizeCompany(record[field]) : record[field]);
       return exact ? actual === expected : actual.includes(expected);
     }));
   }
