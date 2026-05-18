@@ -1623,15 +1623,37 @@ function applyListFilters(records, searchParams) {
     const fields = filterFieldsFor(key);
     const expected = normalizedKey(value);
     const expectedCpf = normalizeCpf(value);
+    const exact = isExactFilterKey(key);
     result = result.filter((record) => fields.some((field) => {
       if (field === "cpf") {
         return expectedCpf ? normalizeCpf(record[field]).includes(expectedCpf) : normalizedKey(record[field]).includes(expected);
       }
-      return normalizedKey(record[field]).includes(expected);
+      const actual = normalizedKey(record[field]);
+      return exact ? actual === expected : actual.includes(expected);
     }));
   }
 
   return result;
+}
+
+function isExactFilterKey(key) {
+  return [
+    "enrollment",
+    "unit",
+    "position",
+    "company",
+    "status",
+    "serviceType",
+    "workPost",
+    "contract",
+    "centroDeCusto",
+    "costCenter",
+    "filial",
+    "cargo",
+    "empresa",
+    "contrato",
+    "posto"
+  ].includes(key);
 }
 
 function filterFieldsFor(key) {
