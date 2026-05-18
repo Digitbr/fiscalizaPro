@@ -46,17 +46,17 @@ const demoAccounts = [
 ];
 
 const menu = [
-  ["dashboard", "Dashboard", "▦", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["chatbot", "Chatbot Operacional", "◇", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL"]],
-  ["employees", "Funcionários", "☰", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["routes", "Rotas", "⌖", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["services", "Central de Serviços", "□", ["ADMIN_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["occurrences", "Ocorrências", "!", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["notices", "Mural de Avisos", "◫", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["movements", "Movimentações", "↔", ["ADMIN_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["reports", "Relatórios", "⇩", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
-  ["users", "Usuários e Permissões", "◎", ["ADMIN_OPERACIONAL"]],
-  ["settings", "Configurações", "⚙", ["ADMIN_OPERACIONAL"]]
+  ["dashboard", "Dashboard", "D", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["employees", "Funcionários", "F", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["routes", "Rotas", "R", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["occurrences", "Ocorrências", "O", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["services", "Serviços", "S", ["ADMIN_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["movements", "Movimentações", "M", ["ADMIN_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["reports", "Relatórios", "E", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["chatbot", "Assistente", "A", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL"]],
+  ["notices", "Avisos", "N", ["ADMIN_OPERACIONAL", "FISCAL_OPERACIONAL", "SUPERVISOR_OPERACIONAL", "USUARIO_CONSULTA"]],
+  ["users", "Usuários", "U", ["ADMIN_OPERACIONAL"]],
+  ["settings", "Configurações", "C", ["ADMIN_OPERACIONAL"]]
 ];
 
 const occurrenceTypes = [
@@ -117,15 +117,15 @@ function renderLogin(error = "") {
   app.innerHTML = `
     <main class="login-page">
       <section class="login-hero">
-        <div class="brand-row"><span class="brand-mark">FP</span><span>FiscalizaPro</span></div>
+        <div class="brand-row"><span class="brand-mark">AS</span><span>ArgosSIGO</span></div>
         <div>
-          <h1>Fiscalização operacional com chatbot, rastreabilidade e controle por perfil.</h1>
-          <p>Uma base funcional para administrar serviços terceirizados, equipes, rotas, ocorrências, central de serviços, avisos e auditoria em ambientes com alto volume de dados.</p>
+          <h1>Gestão operacional simples para segurança patrimonial.</h1>
+          <p>Controle funcionários, postos, rotas e ocorrências em uma interface limpa, objetiva e focada na operação.</p>
         </div>
       </section>
       <section class="login-panel">
-        <h2>Acessar plataforma</h2>
-        <div class="subtle">Use e-mail ou matrícula. A sessão respeita perfil, bloqueio por tentativas e autorização por rota.</div>
+        <h2>Acessar ArgosSIGO</h2>
+        <div class="subtle">Gestão Operacional</div>
         ${error ? `<div class="error-banner">${h(error)}</div>` : ""}
         <form id="login-form">
           <div class="field">
@@ -156,7 +156,7 @@ function renderApp() {
   app.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand-row"><span class="brand-mark">FP</span><span>FiscalizaPro</span></div>
+        <div class="brand-row"><span class="brand-mark">AS</span><span><strong>ArgosSIGO</strong><small>Gestão Operacional</small></span></div>
         <div class="profile-box">
           <strong>${h(state.user.name)}</strong>
           <span>${roleLabel(state.user.role)} · ${h(state.user.area || "Área operacional")}</span>
@@ -1280,7 +1280,7 @@ function pageHeader(title, subtitle) {
         <div class="subtle">${h(subtitle)}</div>
       </div>
       <div class="row">
-        <button class="btn ghost" data-view="chatbot">Chatbot</button>
+        <button class="btn ghost" data-view="chatbot">Assistente</button>
         <button class="btn" data-action="logout">Sair</button>
       </div>
     </header>

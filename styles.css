@@ -1,19 +1,19 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7f8;
+  --bg: #f7f8fa;
   --surface: #ffffff;
-  --surface-2: #edf2f0;
+  --surface-2: #f3f4f6;
   --ink: #111827;
-  --muted: #667085;
-  --line: #dfe7e3;
-  --primary: #14532d;
-  --primary-strong: #0f3f25;
-  --info: #1d4ed8;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --primary: #166534;
+  --primary-strong: #14532d;
+  --info: #2563eb;
   --warning: #b7791f;
   --danger: #b42318;
   --success: #15803d;
-  --focus: rgba(15, 118, 110, 0.24);
-  --shadow: 0 16px 40px rgba(25, 32, 42, 0.09);
+  --focus: rgba(22, 101, 52, 0.14);
+  --shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
 * {
@@ -42,14 +42,12 @@ button {
 .login-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 480px);
-  background:
-    linear-gradient(120deg, rgba(15, 118, 110, 0.86), rgba(37, 99, 235, 0.6)),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='1000' viewBox='0 0 1600 1000'%3E%3Crect width='1600' height='1000' fill='%2325313f'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.13'%3E%3Cpath d='M120 200h520v300H120zM760 160h620v260H760zM250 600h460v220H250zM900 540h420v260H900z'/%3E%3Cpath d='M120 320h520M380 200v300M760 290h620M1070 160v260M250 710h460M480 600v220M900 670h420M1110 540v260'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.16'%3E%3Ccircle cx='180' cy='320' r='8'/%3E%3Ccircle cx='760' cy='290' r='8'/%3E%3Ccircle cx='1110' cy='670' r='8'/%3E%3Ccircle cx='480' cy='710' r='8'/%3E%3C/g%3E%3C/svg%3E") center / cover;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+  background: #f7f8fa;
 }
 
 .login-hero {
-  color: #fff;
+  color: var(--ink);
   padding: 64px;
   display: flex;
   flex-direction: column;
@@ -62,7 +60,9 @@ button {
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  border: 1px solid var(--line);
+  color: var(--primary);
+  background: #fff;
   border-radius: 8px;
   font-weight: 800;
 }
@@ -72,14 +72,22 @@ button {
   align-items: center;
   gap: 12px;
   font-weight: 800;
-  font-size: 20px;
+  font-size: 18px;
+}
+
+.brand-row small {
+  display: block;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
 }
 
 .login-hero h1 {
   max-width: 760px;
   margin: 0 0 18px;
-  font-size: clamp(40px, 6vw, 74px);
-  line-height: 0.95;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
   letter-spacing: 0;
 }
 
@@ -88,16 +96,17 @@ button {
   margin: 0;
   font-size: 18px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--muted);
 }
 
 .login-panel {
-  background: rgba(255, 255, 255, 0.98);
+  background: #fff;
   padding: 44px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  box-shadow: var(--shadow);
+  border-left: 1px solid var(--line);
+  box-shadow: none;
 }
 
 .login-panel h2 {
@@ -237,12 +246,12 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 276px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
 }
 
 .sidebar {
-  background: #0f1f19;
-  border-right: 1px solid #17382a;
+  background: #fff;
+  border-right: 1px solid var(--line);
   padding: 22px 16px;
   position: sticky;
   top: 0;
@@ -251,18 +260,18 @@ button {
 }
 
 .sidebar .brand-row {
-  color: #ecfdf5;
+  color: var(--ink);
   margin-bottom: 22px;
 }
 
 .sidebar .brand-mark {
-  color: #bbf7d0;
-  border-color: #86efac;
+  color: var(--primary);
+  border-color: var(--line);
 }
 
 .profile-box {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #f9fafb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 18px;
@@ -271,11 +280,11 @@ button {
 .profile-box strong {
   display: block;
   font-size: 14px;
-  color: #ffffff;
+  color: var(--ink);
 }
 
 .profile-box span {
-  color: #a7f3d0;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -302,8 +311,25 @@ button {
 
 .nav button:hover,
 .nav button.active {
-  background: rgba(255, 255, 255, 0.11);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: var(--ink);
+}
+
+.nav button > span:first-child {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nav button.active > span:first-child {
+  color: var(--primary);
+  border-color: rgba(22, 101, 52, 0.24);
+  background: #ecfdf3;
 }
 
 .main {
@@ -329,12 +355,11 @@ button {
   grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
   gap: 18px;
   align-items: stretch;
-  background:
-    linear-gradient(135deg, rgba(15, 31, 25, 0.94), rgba(20, 83, 45, 0.88)),
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06));
-  color: #ecfdf5;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 22px;
+  padding: 20px;
   margin-bottom: 14px;
 }
 
@@ -345,11 +370,11 @@ button {
 
 .security-intro p {
   margin: 0;
-  color: #d1fae5;
+  color: var(--muted);
 }
 
 .eyebrow {
-  color: #86efac;
+  color: var(--primary);
   font-size: 12px;
   font-weight: 850;
   text-transform: uppercase;
@@ -362,15 +387,15 @@ button {
 }
 
 .security-kpis div {
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #f9fafb;
 }
 
 .security-kpis span {
   display: block;
-  color: #bbf7d0;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -527,7 +552,7 @@ button {
 .detail-item span,
 .compact-list span {
   display: block;
-  color: #d1fae5;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 750;
 }
